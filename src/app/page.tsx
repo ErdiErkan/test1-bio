@@ -1,18 +1,36 @@
-import Link from 'next/link'
+import { Suspense } from 'react'
+import SearchBar from '@/components/ui/SearchBar'
+import CelebrityGrid from '@/components/home/CelebrityGrid'
 import { prisma } from '@/lib/db'
-import CelebrityCard from '@/components/CelebrityCard'
-import SearchBar from '@/components/SearchBar'
 
 export const dynamic = 'force-dynamic'
 
-async function getCelebrities() {
+// Celebrity listesini getir
+async function getCelebrities(search?: string) {
   try {
     const celebrities = await prisma.celebrity.findMany({
+      where: search ? {
+        OR: [
+          {
+            name: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          },
+          {
+            profession: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          }
+        ]
+      } : {},
       orderBy: {
         createdAt: 'desc'
       },
-      take: 6
+      take: 12 // Son 12 ünlü
     })
+
     return celebrities
   } catch (error) {
     console.error('Error fetching celebrities:', error)
@@ -20,71 +38,57 @@ async function getCelebrities() {
   }
 }
 
-export default async function HomePage() {
-  const celebrities = await getCelebrities()
+// Loading komponenti
+function LoadingGrid() {
+  return (
+    <div>
+      <div className="h-8 bg-gray-200 rounded w-64 mb-6 animate-pulse"></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="bg-gray-200 rounded-lg h-80 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Celebrities wrapper komponenti
+async function CelebritiesWrapper({ search }: { search?: string }) {
+  const celebrities = await getCelebrities(search)
+  const title = search ? `"${search}" araması için sonuçlar` : "Son Eklenen Ünlüler"
+
+  return <CelebrityGrid celebrities={celebrities} title={title} />
+}
+
+// Ana sayfa komponenti
+export default function HomePage({
+  searchParams
+}: {
+  searchParams: { search?: string }
+}) {
+  const search = searchParams?.search
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">
-              Ünlü Biyografi Platformu
-            </h1>
-            <Link
-              href="/admin"
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
-            >
-              Admin Panel
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {/* Search Bar */}
-        <div className="mb-12">
-          <SearchBar />
-        </div>
-
-        {/* Celebrities Section */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Son Eklenen Ünlüler
-          </h2>
-
-          {celebrities.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {celebrities.map((celebrity) => (
-                <CelebrityCard key={celebrity.id} celebrity={celebrity} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">
-                Henüz hiç ünlü eklenmemiş.
-              </p>
-              <Link
-                href="/admin"
-                className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                İlk ünlüyü ekle
-              </Link>
-            </div>
-          )}
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-16">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-600 text-sm">
-            © 2024 Ünlü Biyografi Platformu. Tüm hakları saklıdır.
+      {/* Hero Section */}
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            ⭐ Ünlü Biyografilerini Keşfet
+          </h1>
+          <p className="text-xl mb-8 text-blue-100">
+            Favori ünlülerinin hayat hikayelerini öğren
           </p>
+          <SearchBar placeholder="Hangi ünlüyü arıyorsun?" />
         </div>
-      </footer>
+      </section>
+
+      {/* Content Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Suspense fallback={<LoadingGrid />}>
+          <CelebritiesWrapper search={search} />
+        </Suspense>
+      </section>
     </div>
   )
 }

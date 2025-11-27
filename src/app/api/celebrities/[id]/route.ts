@@ -8,14 +8,22 @@ interface RouteParams {
   }
 }
 
-// GET /api/celebrities/[id] - Tek ünlü getir
+// GET /api/celebrities/[id] - Tek ünlü getir (id veya slug ile)
 export async function GET(
   request: NextRequest,
   { params }: RouteParams
 ) {
   try {
-    const celebrity = await prisma.celebrity.findUnique({
-      where: { id: params.id }
+    const { id } = params
+
+    // ID veya slug ile arama yap
+    const celebrity = await prisma.celebrity.findFirst({
+      where: {
+        OR: [
+          { id: id },
+          { slug: id }
+        ]
+      }
     })
 
     if (!celebrity) {

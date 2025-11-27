@@ -49,32 +49,58 @@ export async function PUT(
   { params }: RouteParams
 ) {
   try {
+    const { id } = params
     const body = await request.json()
     const { name, profession, birthDate, birthPlace, bio, image } = body
 
-    const existing = await prisma.celebrity.findUnique({
-      where: { id: params.id }
+    // Validation
+    if (!name || name.trim().length < 2) {
+      return NextResponse.json(
+        { error: 'İsim en az 2 karakter olmalıdır' },
+        { status: 400 }
+      )
+    }
+
+    // Mevcut ünlüyü kontrol et
+    const existingCelebrity = await prisma.celebrity.findUnique({
+      where: { id }
     })
 
-    if (!existing) {
+    if (!existingCelebrity) {
       return NextResponse.json(
         { error: 'Ünlü bulunamadı' },
         { status: 404 }
       )
     }
 
-    // İsim değiştiyse yeni slug oluştur
-    const slug = name && name !== existing.name ? slugify(name) : existing.slug
+    // Yeni slug oluştur (eğer isim değiştiyse)
+    let slug = existingCelebrity.slug
+    if (name.trim() !== existingCelebrity.name) {
+      const newSlug = slugify(name)
+      const slugExists = await prisma.celebrity.findFirst({
+        where: {
+          slug: newSlug,
+          id: { not: id }
+        }
+      })
 
+      if (!slugExists) {
+        slug = newSlug
+      } else {
+        slug = `${newSlug}-${Date.now()}`
+      }
+    }
+
+    // Ünlü güncelle
     const celebrity = await prisma.celebrity.update({
-      where: { id: params.id },
+      where: { id },
       data: {
-        name,
-        profession,
+        name: name.trim(),
+        profession: profession?.trim() || null,
         birthDate: birthDate ? new Date(birthDate) : null,
-        birthPlace,
-        bio,
-        image,
+        birthPlace: birthPlace?.trim() || null,
+        bio: bio?.trim() || null,
+        image: image?.trim() || null,
         slug
       }
     })
@@ -95,11 +121,26 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
-    await prisma.celebrity.delete({
-      where: { id: params.id }
+    const { id } = params
+
+    // Mevcut ünlüyü kontrol et
+    const existingCelebrity = await prisma.celebrity.findUnique({
+      where: { id }
     })
 
-    return NextResponse.json({ success: true })
+    if (!existingCelebrity) {
+      return NextResponse.json(
+        { error: 'Ünlü bulunamadı' },
+        { status: 404 }
+      )
+    }
+
+    // Ünlü sil
+    await prisma.celebrity.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({ message: 'Ünlü başarıyla silindi' })
   } catch (error) {
     console.error('Error deleting celebrity:', error)
     return NextResponse.json(

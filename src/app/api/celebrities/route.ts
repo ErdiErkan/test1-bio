@@ -2,36 +2,51 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { slugify } from '@/lib/utils'
 
-// GET /api/celebrities - Tüm ünlüleri listele
+// GET /api/celebrities - Tüm ünlüleri listele (pagination desteği ile)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '12')
+    const skip = (page - 1) * limit
 
-    const celebrities = await prisma.celebrity.findMany({
-      where: search ? {
-        OR: [
-          {
-            name: {
-              contains: search,
-              mode: 'insensitive'
-            }
-          },
-          {
-            profession: {
-              contains: search,
-              mode: 'insensitive'
-            }
+    const where = search ? {
+      OR: [
+        {
+          name: {
+            contains: search,
+            mode: 'insensitive' as const
           }
-        ]
-      } : {},
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: 12 // Son 12 ünlü
-    })
+        },
+        {
+          profession: {
+            contains: search,
+            mode: 'insensitive' as const
+          }
+        }
+      ]
+    } : {}
 
-    return NextResponse.json(celebrities)
+    const [celebrities, total] = await Promise.all([
+      prisma.celebrity.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.celebrity.count({ where })
+    ])
+
+    return NextResponse.json({
+      celebrities,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
   } catch (error) {
     console.error('Error fetching celebrities:', error)
     return NextResponse.json(
@@ -47,35 +62,33 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, profession, birthDate, birthPlace, bio, image } = body
 
-    if (!name) {
+    // Validation
+    if (!name || name.trim().length < 2) {
       return NextResponse.json(
-        { error: 'İsim alanı zorunludur' },
+        { error: 'İsim en az 2 karakter olmalıdır' },
         { status: 400 }
       )
     }
 
-    const slug = slugify(name)
-
-    // Aynı slug'a sahip ünlü var mı kontrol et
-    const existing = await prisma.celebrity.findUnique({
+    // Slug oluştur ve uniqueness kontrol et
+    let slug = slugify(name)
+    const existingSlug = await prisma.celebrity.findUnique({
       where: { slug }
     })
 
-    if (existing) {
-      return NextResponse.json(
-        { error: 'Bu isimde bir ünlü zaten mevcut' },
-        { status: 400 }
-      )
+    if (existingSlug) {
+      slug = `${slug}-${Date.now()}`
     }
 
+    // Ünlü oluştur
     const celebrity = await prisma.celebrity.create({
       data: {
-        name,
-        profession,
+        name: name.trim(),
+        profession: profession?.trim() || null,
         birthDate: birthDate ? new Date(birthDate) : null,
-        birthPlace,
-        bio,
-        image,
+        birthPlace: birthPlace?.trim() || null,
+        bio: bio?.trim() || null,
+        image: image?.trim() || null,
         slug
       }
     })

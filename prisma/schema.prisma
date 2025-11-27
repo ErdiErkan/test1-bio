@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Celebrity {
+  id          String   @id @default(cuid())
+  name        String
+  profession  String?
+  birthDate   DateTime?
+  birthPlace  String?
+  bio         String?
+  image       String?
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("celebrities")
+}

@@ -47,10 +47,10 @@ export default async function CelebrityPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Back Link */}
+        <div className="mb-6">
           <Link
             href="/"
             className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors"
@@ -71,10 +71,6 @@ export default async function CelebrityPage({ params }: PageProps) {
             Ana Sayfaya Dön
           </Link>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <article className="bg-white rounded-lg shadow-md overflow-hidden">
           {/* Image */}
           {celebrity.image ? (
@@ -150,16 +146,7 @@ export default async function CelebrityPage({ params }: PageProps) {
             )}
           </div>
         </article>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-16">
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-600 text-sm">
-            © 2024 Ünlü Biyografi Platformu. Tüm hakları saklıdır.
-          </p>
-        </div>
-      </footer>
+      </div>
     </div>
   )
 }

@@ -3,12 +3,32 @@ import { prisma } from '@/lib/db'
 import { slugify } from '@/lib/utils'
 
 // GET /api/celebrities - Tüm ünlüleri listele
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')
+
     const celebrities = await prisma.celebrity.findMany({
+      where: search ? {
+        OR: [
+          {
+            name: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          },
+          {
+            profession: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          }
+        ]
+      } : {},
       orderBy: {
         createdAt: 'desc'
-      }
+      },
+      take: 12 // Son 12 ünlü
     })
 
     return NextResponse.json(celebrities)

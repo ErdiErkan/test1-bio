@@ -9,15 +9,21 @@ datasource db {
 
 model Celebrity {
   id          String   @id @default(cuid())
-  name        String
-  profession  String?
+  name        String   @db.VarChar(255)
+  profession  String?  @db.VarChar(255)
   birthDate   DateTime?
-  birthPlace  String?
-  bio         String?
-  image       String?
-  slug        String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  birthPlace  String?  @db.VarChar(255)
+  bio         String?  @db.Text
+  image       String?  @db.VarChar(1000)
+  slug        String   @unique @db.VarChar(300)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  // Performance indexes
+  @@index([name])
+  @@index([profession])
+  @@index([createdAt(sort: Desc)])
+  @@index([slug])
 
   @@map("celebrities")
 }

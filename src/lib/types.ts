@@ -1,3 +1,4 @@
+// Core Celebrity type from Prisma
 export interface Celebrity {
   id: string
   name: string
@@ -11,6 +12,7 @@ export interface Celebrity {
   updatedAt: Date
 }
 
+// Form data type for create/update operations
 export interface CelebrityFormData {
   name: string
   profession?: string
@@ -18,4 +20,33 @@ export interface CelebrityFormData {
   birthPlace?: string
   bio?: string
   image?: string
+}
+
+// API Response types for better type safety
+export interface CelebritiesResponse {
+  celebrities: Celebrity[]
+  pagination: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
+
+export interface ApiErrorResponse {
+  error: string
+  details?: string
+}
+
+// Validation error type
+export interface ValidationError {
+  field: string
+  message: string
+}
+
+// Search parameters type
+export interface SearchParams {
+  search?: string
+  page?: number
+  limit?: number
 }

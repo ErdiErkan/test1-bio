@@ -29,10 +29,26 @@ export default function AdminPage() {
   const fetchCelebrities = async () => {
     try {
       const response = await fetch('/api/celebrities?limit=50')
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
       const data = await response.json()
-      setCelebrities(data.celebrities || data)
+
+      // Validate response structure
+      if (data.celebrities && Array.isArray(data.celebrities)) {
+        setCelebrities(data.celebrities)
+      } else if (Array.isArray(data)) {
+        setCelebrities(data)
+      } else {
+        console.error('Invalid response format:', data)
+        setCelebrities([])
+        addToast('Geçersiz veri formatı alındı', 'error')
+      }
     } catch (error) {
       console.error('Fetch error:', error)
+      setCelebrities([])
       addToast('Ünlüler yüklenirken hata oluştu', 'error')
     } finally {
       setLoading(false)

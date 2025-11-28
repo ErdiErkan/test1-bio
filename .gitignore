@@ -23,8 +23,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env*.local
 .env
+.env*.local
+.env.production
 
 # vercel
 .vercel
@@ -32,3 +33,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma
+/prisma/migrations/
+
+# uploads
+/public/uploads/
+
+# pm2
+ecosystem.config.js.local
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# logs
+logs
+*.log

@@ -1,66 +1,76 @@
 'use client'
 
 import { useEffect } from 'react'
-import Link from 'next/link'
 
-export default function Error({
-  error,
-  reset,
-}: {
+interface ErrorProps {
   error: Error & { digest?: string }
   reset: () => void
-}) {
+}
+
+export default function GlobalError({ error, reset }: ErrorProps) {
   useEffect(() => {
     // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error boundary caught:', error)
-    }
+    console.error('Application Error:', error)
+    
+    // In production, you could send to error tracking service
+    // Example: Sentry.captureException(error)
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8 text-center">
-        <div className="mb-6">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Bir Hata Oluştu
-          </h1>
-          <p className="text-gray-600">
-            Üzgünüz, bir şeyler ters gitti. Lütfen tekrar deneyin.
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center">
+        {/* Error Icon */}
+        <div className="text-8xl mb-6">😵</div>
+        
+        {/* Error Title */}
+        <h1 className="text-3xl font-bold text-gray-800 mb-4">
+          Bir Şeyler Ters Gitti
+        </h1>
+        
+        {/* Error Description */}
+        <p className="text-gray-600 mb-6">
+          Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin veya ana sayfaya dönün.
+        </p>
 
+        {/* Error Details (Development Only) */}
         {process.env.NODE_ENV === 'development' && error.message && (
-          <div className="mb-6 p-4 bg-red-50 rounded-lg text-left">
-            <p className="text-sm font-mono text-red-800 break-words">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-left">
+            <p className="text-sm font-medium text-red-800 mb-1">Hata Detayı:</p>
+            <p className="text-sm text-red-600 font-mono break-all">
               {error.message}
             </p>
             {error.digest && (
-              <p className="text-xs text-red-600 mt-2">
+              <p className="text-xs text-red-400 mt-2">
                 Digest: {error.digest}
               </p>
             )}
           </div>
         )}
 
-        <div className="space-y-3">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            onClick={reset}
-            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            onClick={() => reset()}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
             🔄 Tekrar Dene
           </button>
-
-          <Link
+          
+          <a
             href="/"
-            className="block w-full bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
           >
-            🏠 Ana Sayfaya Dön
-          </Link>
+            🏠 Ana Sayfa
+          </a>
         </div>
 
-        <p className="mt-6 text-sm text-gray-500">
-          Sorun devam ederse lütfen yönetici ile iletişime geçin.
+        {/* Support Link */}
+        <p className="mt-8 text-sm text-gray-500">
+          Sorun devam ederse{' '}
+          <a href="/admin" className="text-blue-600 hover:underline">
+            yönetici paneline
+          </a>{' '}
+          göz atın.
         </p>
       </div>
     </div>

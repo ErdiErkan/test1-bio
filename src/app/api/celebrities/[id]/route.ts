@@ -1,151 +1,120 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { slugify } from '@/lib/utils'
 
-interface RouteParams {
-  params: {
-    id: string
+function createSlug(text: string): string {
+  const turkishMap: Record<string, string> = {
+    'ç': 'c', 'Ç': 'C',
+    'ğ': 'g', 'Ğ': 'G',
+    'ı': 'i', 'I': 'I',
+    'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ş': 's', 'Ş': 'S',
+    'ü': 'u', 'Ü': 'U',
   }
+
+  return text
+    .split('')
+    .map(char => turkishMap[char] || char)
+    .join('')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
-// GET /api/celebrities/[id] - Tek ünlü getir (id veya slug ile)
-export async function GET(
-  request: NextRequest,
-  { params }: RouteParams
-) {
-  try {
-    const { id } = params
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-    // ID veya slug ile arama yap
+// GET
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params
+
     const celebrity = await prisma.celebrity.findFirst({
       where: {
-        OR: [
-          { id: id },
-          { slug: id }
-        ]
+        OR: [{ id }, { slug: id }]
       }
     })
 
     if (!celebrity) {
-      return NextResponse.json(
-        { error: 'Ünlü bulunamadı' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Ünlü bulunamadı' }, { status: 404 })
     }
 
     return NextResponse.json(celebrity)
   } catch (error) {
-    console.error('Error fetching celebrity:', error)
-    return NextResponse.json(
-      { error: 'Ünlü yüklenirken bir hata oluştu' },
-      { status: 500 }
-    )
+    console.error('GET error:', error)
+    return NextResponse.json({ error: 'Hata oluştu' }, { status: 500 })
   }
 }
 
-// PUT /api/celebrities/[id] - Ünlü güncelle
-export async function PUT(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+// PUT
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
-    const { name, profession, birthDate, birthPlace, bio, image } = body
 
-    // Validation
-    if (!name || name.trim().length < 2) {
-      return NextResponse.json(
-        { error: 'İsim en az 2 karakter olmalıdır' },
-        { status: 400 }
-      )
+    const existing = await prisma.celebrity.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Ünlü bulunamadı' }, { status: 404 })
     }
 
-    // Mevcut ünlüyü kontrol et
-    const existingCelebrity = await prisma.celebrity.findUnique({
-      where: { id }
-    })
-
-    if (!existingCelebrity) {
-      return NextResponse.json(
-        { error: 'Ünlü bulunamadı' },
-        { status: 404 }
-      )
+    if (!body.name?.trim()) {
+      return NextResponse.json({ error: 'İsim zorunlu' }, { status: 400 })
     }
 
-    // Yeni slug oluştur (eğer isim değiştiyse)
-    let slug = existingCelebrity.slug
-    if (name.trim() !== existingCelebrity.name) {
-      const newSlug = slugify(name)
-      const slugExists = await prisma.celebrity.findFirst({
-        where: {
-          slug: newSlug,
-          id: { not: id }
-        }
-      })
+    const name = body.name.trim()
+    let slug = existing.slug
 
-      if (!slugExists) {
-        slug = newSlug
-      } else {
-        slug = `${newSlug}-${Date.now()}`
+    if (name !== existing.name) {
+      slug = createSlug(name)
+      let suffix = 0
+      while (true) {
+        const check = suffix > 0 ? `${slug}-${suffix}` : slug
+        const exists = await prisma.celebrity.findFirst({
+          where: { slug: check, NOT: { id } }
+        })
+        if (!exists) { slug = check; break }
+        suffix++
       }
     }
 
-    // Ünlü güncelle
     const celebrity = await prisma.celebrity.update({
       where: { id },
       data: {
-        name: name.trim(),
-        profession: profession?.trim() || null,
-        birthDate: birthDate ? new Date(birthDate) : null,
-        birthPlace: birthPlace?.trim() || null,
-        bio: bio?.trim() || null,
-        image: image?.trim() || null,
-        slug
+        name,
+        profession: body.profession?.trim() || null,
+        birthDate: body.birthDate ? new Date(body.birthDate) : null,
+        birthPlace: body.birthPlace?.trim() || null,
+        bio: body.bio?.trim() || null,
+        image: body.image?.trim() || null,
+        slug,
       }
     })
 
     return NextResponse.json(celebrity)
   } catch (error) {
-    console.error('Error updating celebrity:', error)
-    return NextResponse.json(
-      { error: 'Ünlü güncellenirken bir hata oluştu' },
-      { status: 500 }
-    )
+    console.error('PUT error:', error)
+    return NextResponse.json({ error: 'Hata oluştu' }, { status: 500 })
   }
 }
 
-// DELETE /api/celebrities/[id] - Ünlü sil
-export async function DELETE(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+// DELETE
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params
+    const { id } = await params
 
-    // Mevcut ünlüyü kontrol et
-    const existingCelebrity = await prisma.celebrity.findUnique({
-      where: { id }
-    })
-
-    if (!existingCelebrity) {
-      return NextResponse.json(
-        { error: 'Ünlü bulunamadı' },
-        { status: 404 }
-      )
+    const existing = await prisma.celebrity.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Ünlü bulunamadı' }, { status: 404 })
     }
 
-    // Ünlü sil
-    await prisma.celebrity.delete({
-      where: { id }
-    })
-
-    return NextResponse.json({ message: 'Ünlü başarıyla silindi' })
+    await prisma.celebrity.delete({ where: { id } })
+    return NextResponse.json({ deleted: true, id })
   } catch (error) {
-    console.error('Error deleting celebrity:', error)
-    return NextResponse.json(
-      { error: 'Ünlü silinirken bir hata oluştu' },
-      { status: 500 }
-    )
+    console.error('DELETE error:', error)
+    return NextResponse.json({ error: 'Hata oluştu' }, { status: 500 })
   }
 }

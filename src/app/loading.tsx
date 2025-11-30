@@ -1,23 +1,47 @@
 export default function Loading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
-      <div className="text-center">
-        <div className="mb-8">
-          <div className="inline-block animate-bounce text-6xl mb-4">
-            ⭐
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section Skeleton */}
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          {/* Title Skeleton */}
+          <div className="h-12 md:h-16 bg-white/20 rounded-lg w-3/4 mx-auto mb-6 animate-pulse" />
+          
+          {/* Subtitle Skeleton */}
+          <div className="h-6 bg-white/20 rounded-lg w-1/2 mx-auto mb-8 animate-pulse" />
+          
+          {/* SearchBar Skeleton */}
+          <div className="max-w-2xl mx-auto">
+            <div className="h-14 bg-white/30 rounded-full animate-pulse" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            CelebHub
-          </h2>
-          <p className="text-gray-600">Yükleniyor...</p>
         </div>
+      </section>
 
-        <div className="flex items-center justify-center space-x-2">
-          <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
-          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse delay-75"></div>
-          <div className="w-3 h-3 bg-pink-600 rounded-full animate-pulse delay-150"></div>
+      {/* Content Section Skeleton */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Title */}
+        <div className="h-8 bg-gray-200 rounded w-64 mb-6 animate-pulse" />
+        
+        {/* Grid Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div 
+              key={i} 
+              className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100"
+            >
+              {/* Image Skeleton */}
+              <div className="aspect-[3/4] bg-gray-200 animate-pulse" />
+              
+              {/* Content Skeleton */}
+              <div className="p-4">
+                <div className="h-5 bg-gray-200 rounded w-3/4 mb-2 animate-pulse" />
+                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2 animate-pulse" />
+                <div className="h-3 bg-gray-200 rounded w-1/4 animate-pulse" />
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </section>
     </div>
   )
 }

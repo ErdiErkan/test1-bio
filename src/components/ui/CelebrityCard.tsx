@@ -1,12 +1,14 @@
-import Link from 'next/link'
+'use client'
+
+import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 
 interface Celebrity {
   id: string
   name: string
   profession?: string | null
   birthDate?: Date | string | null
-  birthPlace?: string | null
   image?: string | null
   slug: string
 }
@@ -15,52 +17,91 @@ interface CelebrityCardProps {
   celebrity: Celebrity
 }
 
+// Yaş hesaplama
+function calculateAge(birthDate: Date | string | null | undefined): number | null {
+  if (!birthDate) return null
+  try {
+    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
+    if (isNaN(birth.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - birth.getFullYear()
+    const monthDiff = today.getMonth() - birth.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--
+    }
+    return age >= 0 ? age : null
+  } catch {
+    return null
+  }
+}
+
+// Placeholder image
+function getPlaceholderImage(name?: string): string {
+  const initial = name?.charAt(0).toUpperCase() || '?'
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&size=400&background=6366f1&color=ffffff&bold=true`
+}
+
 export default function CelebrityCard({ celebrity }: CelebrityCardProps) {
-  const formatDate = (dateString?: Date | string | null) => {
-    if (!dateString) return null
-    return new Date(dateString).toLocaleDateString('tr-TR')
+  const [imageError, setImageError] = useState(false)
+  const [imageLoading, setImageLoading] = useState(true)
+
+  const age = calculateAge(celebrity.birthDate)
+  
+  // Image URL işleme
+  let imageUrl = getPlaceholderImage(celebrity.name)
+  if (celebrity.image && !imageError) {
+    if (celebrity.image.startsWith('http')) {
+      imageUrl = celebrity.image
+    } else {
+      imageUrl = celebrity.image.startsWith('/') ? celebrity.image : `/${celebrity.image}`
+    }
   }
 
   return (
-    <Link href={`/celebrity/${celebrity.slug}`}>
-      <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden cursor-pointer h-full">
-        {/* Resim */}
-        <div className="aspect-[4/3] bg-gray-100 relative">
-          {celebrity.image ? (
-            <Image
-              src={celebrity.image}
-              alt={celebrity.name}
-              fill
-              className="object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-6xl text-gray-400">👤</div>
-            </div>
-          )}
-        </div>
+    <Link
+      href={`/celebrity/${celebrity.slug}`}
+      className="group block bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100"
+    >
+      {/* Image Container */}
+      <div className="relative aspect-[3/4] bg-gray-100 overflow-hidden">
+        {/* Loading Skeleton */}
+        {imageLoading && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+        )}
+        
+        <Image
+          src={imageUrl}
+          alt={celebrity.name}
+          fill
+          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
+            imageLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onLoad={() => setImageLoading(false)}
+          onError={() => {
+            setImageError(true)
+            setImageLoading(false)
+          }}
+        />
+      </div>
 
-        {/* İçerik */}
-        <div className="p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-            {celebrity.name}
-          </h3>
-
-          {celebrity.profession && (
-            <p className="text-sm text-blue-600 mb-2 font-medium">
-              {celebrity.profession}
-            </p>
-          )}
-
-          <div className="text-sm text-gray-600 space-y-1">
-            {celebrity.birthDate && (
-              <p>📅 {formatDate(celebrity.birthDate)}</p>
-            )}
-            {celebrity.birthPlace && (
-              <p className="line-clamp-1">📍 {celebrity.birthPlace}</p>
-            )}
-          </div>
-        </div>
+      {/* Content */}
+      <div className="p-4">
+        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate">
+          {celebrity.name}
+        </h3>
+        
+        {celebrity.profession && (
+          <p className="text-sm text-gray-500 mt-1 truncate">
+            {celebrity.profession}
+          </p>
+        )}
+        
+        {age !== null && (
+          <p className="text-xs text-gray-400 mt-2">
+            {age} yaşında
+          </p>
+        )}
       </div>
     </Link>
   )

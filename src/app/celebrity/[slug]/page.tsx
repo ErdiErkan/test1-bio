@@ -7,9 +7,7 @@ import type { Metadata } from 'next'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  params: {
-    slug: string
-  }
+  params: Promise<{ slug: string }>
 }
 
 // Celebrity verisi getir
@@ -26,8 +24,9 @@ async function getCelebrity(slug: string) {
 }
 
 // SEO Metadata
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const celebrity = await getCelebrity(params.slug)
+export async function generateMetadata({ params }: PageProps) {
+  const { slug } = await params
+  const celebrity = await getCelebrity(slug)
 
   if (!celebrity) {
     return {
@@ -58,7 +57,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 // Ana sayfa komponenti
 export default async function CelebrityPage({ params }: PageProps) {
-  const celebrity = await getCelebrity(params.slug)
+  const { slug } = await params
+  const celebrity = await getCelebrity(slug)
 
   if (!celebrity) {
     notFound()

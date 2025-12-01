@@ -8,6 +8,44 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// User Model - Authentication
+// ============================================
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique @db.VarChar(255)
+  passwordHash  String   @db.VarChar(255)
+  name          String?  @db.VarChar(255)
+  role          String   @default("admin") @db.VarChar(50) // admin, editor vb.
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([email])
+  @@map("users")
+}
+
+// ============================================
+// Category Model - Flexible categorization
+// ============================================
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  // Many-to-Many relationship
+  celebrities Celebrity[]
+
+  @@index([name])
+  @@index([slug])
+  @@map("categories")
+}
+
+// ============================================
+// Celebrity Model - Main entity
+// ============================================
 model Celebrity {
   id          String   @id @default(cuid())
   name        String   @db.VarChar(255)
@@ -19,6 +57,9 @@ model Celebrity {
   slug        String   @unique @db.VarChar(300)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  // Many-to-Many relationship (Implicit)
+  categories  Category[]
 
   // Performance indexes
   @@index([name])

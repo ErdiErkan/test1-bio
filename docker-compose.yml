@@ -41,9 +41,9 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "npx -y prisma@6 db push && node server.js"
+      sh -c "npx -y prisma@6 migrate deploy && npx -y prisma@6 db seed && node server.js"
     volumes:
-      - ./public/uploads:/app/public/uploads
+      - uploads_data:/app/public/uploads
     networks:
       - celebhub_network
     healthcheck:
@@ -59,4 +59,6 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  uploads_data:
     driver: local

@@ -6,7 +6,15 @@ import { prisma } from '@/lib/db'
 async function getCelebrity(id: string) {
   try {
     const celebrity = await prisma.celebrity.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        categories: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
     })
     return celebrity
   } catch (error) {

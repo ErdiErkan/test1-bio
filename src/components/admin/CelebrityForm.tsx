@@ -1,9 +1,13 @@
-"use client"
+'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/useToast'
-import { validateCelebrityForm, type CelebrityFormData } from '@/lib/validations'
+import { validateCelebrityForm } from '@/lib/validations'
+import { uploadImage } from '@/actions/upload'
+import { createCelebrity, updateCelebrity } from '@/actions/celebrities'
+import { getCategories } from '@/actions/categories'
+import Image from 'next/image'
 
 interface Celebrity {
   id: string
@@ -13,6 +17,7 @@ interface Celebrity {
   birthPlace?: string | null
   bio?: string | null
   image?: string | null
+  categories?: { id: string; name: string }[]
 }
 
 interface CelebrityFormProps {
@@ -20,37 +25,97 @@ interface CelebrityFormProps {
   isEdit?: boolean
 }
 
+interface Category {
+  id: string
+  name: string
+  slug: string
+}
+
 export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFormProps) {
   const router = useRouter()
   const { addToast } = useToast()
 
-  const [formData, setFormData] = useState<CelebrityFormData>({
+  const [formData, setFormData] = useState({
     name: celebrity?.name || '',
     profession: celebrity?.profession || '',
     birthDate: celebrity?.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
     birthPlace: celebrity?.birthPlace || '',
     bio: celebrity?.bio || '',
-    image: celebrity?.image || ''
+    image: celebrity?.image || '',
+    categoryIds: celebrity?.categories?.map(c => c.id) || []
   })
 
+  const [categories, setCategories] = useState<Category[]>([])
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>(celebrity?.image || '')
   const [errors, setErrors] = useState<{[key: string]: string}>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+
+  // Kategorileri yükle
+  useEffect(() => {
+    async function loadCategories() {
+      const result = await getCategories()
+      if (result.success && result.data) {
+        setCategories(result.data)
+      }
+    }
+    loadCategories()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
 
-    // Error temizle
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }))
     }
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Dosya tipi kontrolü
+    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
+      addToast('Sadece JPG, PNG ve WEBP formatları desteklenir', 'error')
+      return
+    }
+
+    // Dosya boyutu kontrolü (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('Dosya boyutu maksimum 5MB olabilir', 'error')
+      return
+    }
+
+    setImageFile(file)
+
+    // Preview oluştur
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleCategoryToggle = (categoryId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      categoryIds: prev.categoryIds.includes(categoryId)
+        ? prev.categoryIds.filter(id => id !== categoryId)
+        : [...prev.categoryIds, categoryId]
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // Validation
-    const validationErrors = validateCelebrityForm(formData)
+    const validationErrors = validateCelebrityForm({
+      ...formData,
+      image: imagePreview || formData.image
+    })
+
     if (validationErrors.length > 0) {
       const errorMap = validationErrors.reduce((acc, error) => {
         acc[error.field] = error.message
@@ -65,20 +130,43 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     setIsSubmitting(true)
 
     try {
-      const url = isEdit ? `/api/celebrities/${celebrity!.id}` : '/api/celebrities'
-      const method = isEdit ? 'PUT' : 'POST'
+      let imagePath = formData.image
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      })
+      // Resim yükleme
+      if (imageFile) {
+        setIsUploadingImage(true)
+        const uploadFormData = new FormData()
+        uploadFormData.append('file', imageFile)
 
-      const result = await response.json()
+        const uploadResult = await uploadImage(uploadFormData)
 
-      if (!response.ok) {
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || 'Resim yüklenemedi')
+        }
+
+        imagePath = uploadResult.imagePath || ''
+        setIsUploadingImage(false)
+      }
+
+      // Celebrity oluştur/güncelle
+      const celebrityData = {
+        name: formData.name,
+        profession: formData.profession,
+        birthDate: formData.birthDate,
+        birthPlace: formData.birthPlace,
+        bio: formData.bio,
+        image: imagePath,
+        categoryIds: formData.categoryIds
+      }
+
+      let result
+      if (isEdit && celebrity) {
+        result = await updateCelebrity(celebrity.id, celebrityData)
+      } else {
+        result = await createCelebrity(celebrityData)
+      }
+
+      if (!result.success) {
         throw new Error(result.error || 'İşlem başarısız')
       }
 
@@ -94,13 +182,14 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
       addToast(error instanceof Error ? error.message : 'Bir hata oluştu', 'error')
     } finally {
       setIsSubmitting(false)
+      setIsUploadingImage(false)
     }
   }
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        {isEdit ? '✏️ Ünlü Düzenle' : '➕ Yeni Ünlü Ekle'}
+        {isEdit ? 'Ünlü Düzenle' : 'Yeni Ünlü Ekle'}
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -145,6 +234,33 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           )}
         </div>
 
+        {/* Kategoriler - Multi Select */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Kategoriler
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {categories.map((category) => (
+              <label
+                key={category.id}
+                className={`flex items-center px-4 py-3 border rounded-lg cursor-pointer transition-colors ${
+                  formData.categoryIds.includes(category.id)
+                    ? 'bg-blue-50 border-blue-500'
+                    : 'border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.categoryIds.includes(category.id)}
+                  onChange={() => handleCategoryToggle(category.id)}
+                  className="mr-2"
+                />
+                <span className="text-sm">{category.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* İki kolon */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Doğum Tarihi */}
@@ -187,24 +303,33 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           </div>
         </div>
 
-        {/* Resim URL */}
+        {/* Resim Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Resim URL
+            Resim
           </label>
-          <input
-            type="url"
-            name="image"
-            value={formData.image}
-            onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.image ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="https://example.com/resim.jpg"
-          />
-          {errors.image && (
-            <p className="mt-1 text-sm text-red-600">{errors.image}</p>
+
+          {imagePreview && (
+            <div className="mb-4">
+              <Image
+                src={imagePreview}
+                alt="Preview"
+                width={200}
+                height={200}
+                className="rounded-lg object-cover"
+              />
+            </div>
           )}
+
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/jpg,image/webp"
+            onChange={handleImageChange}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Maksimum 5MB, JPG/PNG/WEBP formatı
+          </p>
         </div>
 
         {/* Biyografi */}
@@ -241,16 +366,16 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           </button>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploadingImage}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? (
+            {isSubmitting || isUploadingImage ? (
               <span className="flex items-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                {isEdit ? 'Güncelleniyor...' : 'Ekleniyor...'}
+                {isUploadingImage ? 'Resim yükleniyor...' : isEdit ? 'Güncelleniyor...' : 'Ekleniyor...'}
               </span>
             ) : (
-              isEdit ? '💾 Güncelle' : '➕ Ekle'
+              isEdit ? 'Güncelle' : 'Ekle'
             )}
           </button>
         </div>

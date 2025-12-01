@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import SearchBar from '@/components/ui/SearchBar'
+import AdvancedSearch from '@/components/search/AdvancedSearch'
 import CelebrityGrid from '@/components/home/CelebrityGrid'
 import { prisma } from '@/lib/db'
 import { Metadata } from 'next'
@@ -12,16 +12,30 @@ export const metadata: Metadata = {
   description: 'Favori ünlülerinizin hayat hikayelerini keşfedin. Detaylı biyografiler, kariyer bilgileri ve daha fazlası.',
 }
 
-async function getCelebrities(search?: string) {
+async function getCelebrities(search?: string, categorySlug?: string) {
   try {
+    const where: any = {}
+
+    // Arama query'si
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { profession: { contains: search, mode: 'insensitive' } },
+        { bio: { contains: search, mode: 'insensitive' } }
+      ]
+    }
+
+    // Kategori filtresi
+    if (categorySlug) {
+      where.categories = {
+        some: {
+          slug: categorySlug
+        }
+      }
+    }
+
     const celebrities = await prisma.celebrity.findMany({
-      where: search ? {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { profession: { contains: search, mode: 'insensitive' } },
-          { bio: { contains: search, mode: 'insensitive' } }
-        ]
-      } : {},
+      where,
       orderBy: { createdAt: 'desc' },
       take: 12,
       select: {
@@ -40,6 +54,23 @@ async function getCelebrities(search?: string) {
   }
 }
 
+async function getCategories() {
+  try {
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      }
+    })
+    return categories
+  } catch (error) {
+    console.error('Database error fetching categories:', error)
+    return []
+  }
+}
+
 function LoadingGrid() {
   return (
     <div>
@@ -53,10 +84,10 @@ function LoadingGrid() {
   )
 }
 
-async function CelebritiesWrapper({ search }: { search?: string }) {
-  const celebrities = await getCelebrities(search)
-  
-  if (search && celebrities.length === 0) {
+async function CelebritiesWrapper({ search, category }: { search?: string; category?: string }) {
+  const celebrities = await getCelebrities(search, category)
+
+  if ((search || category) && celebrities.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🔍</div>
@@ -64,9 +95,10 @@ async function CelebritiesWrapper({ search }: { search?: string }) {
           Sonuç Bulunamadı
         </h2>
         <p className="text-gray-500 mb-6">
-          &quot;{search}&quot; için herhangi bir ünlü bulunamadı.
+          {search && `"${search}" için `}
+          {category && `bu kategoride `}
+          herhangi bir ünlü bulunamadı.
         </p>
-        {/* DÜZELTME: <a> etiketi <Link> ile değiştirildi */}
         <Link
           href="/"
           className="inline-block bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors"
@@ -77,57 +109,47 @@ async function CelebritiesWrapper({ search }: { search?: string }) {
     )
   }
 
-  const title = search 
-    ? `"${search}" için ${celebrities.length} sonuç` 
+  const title = search
+    ? `"${search}" için ${celebrities.length} sonuç`
+    : category
+    ? `Kategori: ${category}`
     : "Son Eklenen Ünlüler"
-    
+
   return <CelebrityGrid celebrities={celebrities} title={title} />
 }
 
 interface HomePageProps {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ q?: string; category?: string }>
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams
-  const search = params?.search
+  const search = params?.q
+  const category = params?.category
+  const categories = await getCategories()
 
   return (
     <div className="min-h-screen bg-gray-50">
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            ⭐ Ünlü Biyografilerini Keşfet
-          </h1>
-          <p className="text-xl mb-8 text-blue-100">
-            Favori ünlülerinin hayat hikayelerini öğren
-          </p>
-          <SearchBar 
-            placeholder="Hangi ünlüyü arıyorsun?" 
-            clearAfterSearch={false}
-          />
-          
-          {search && (
-            <div className="mt-4">
-              <span className="inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full text-sm">
-                Aranan: &quot;{search}&quot;
-                {/* DÜZELTME: <a> etiketi <Link> ile değiştirildi */}
-                <Link 
-                  href="/" 
-                  className="hover:text-yellow-300 transition-colors"
-                  title="Aramayı temizle"
-                >
-                  ✕
-                </Link>
-              </span>
-            </div>
-          )}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl md:text-6xl font-bold mb-4">
+              Ünlü Biyografilerini Keşfet
+            </h1>
+            <p className="text-xl text-blue-100">
+              Favori ünlülerinin hayat hikayelerini öğren
+            </p>
+          </div>
+
+          <div className="max-w-3xl mx-auto">
+            <AdvancedSearch categories={categories} />
+          </div>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Suspense fallback={<LoadingGrid />}>
-          <CelebritiesWrapper search={search} />
+          <CelebritiesWrapper search={search} category={category} />
         </Suspense>
       </section>
     </div>

@@ -15,12 +15,15 @@ async function getCelebrity(id: string) {
   }
 }
 
+// DÜZELTME: params artık Promise<{ id: string }> tipinde
 export default async function EditCelebrityPage({
   params
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const celebrity = await getCelebrity(params.id)
+  // DÜZELTME: params await edilerek id alınıyor
+  const { id } = await params
+  const celebrity = await getCelebrity(id)
 
   if (!celebrity) {
     notFound()

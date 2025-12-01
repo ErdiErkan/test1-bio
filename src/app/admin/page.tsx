@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useToast } from '@/hooks/useToast'
@@ -22,11 +22,8 @@ export default function AdminPage() {
   const [showDeleteModal, setShowDeleteModal] = useState<Celebrity | null>(null)
   const { addToast } = useToast()
 
-  useEffect(() => {
-    fetchCelebrities()
-  }, [])
-
-  const fetchCelebrities = async () => {
+  // DÜZELTME: Fonksiyon useCallback içine alındı
+  const fetchCelebrities = useCallback(async () => {
     try {
       const response = await fetch('/api/celebrities?limit=50')
 
@@ -36,7 +33,6 @@ export default function AdminPage() {
 
       const data = await response.json()
 
-      // Validate response structure
       if (data.celebrities && Array.isArray(data.celebrities)) {
         setCelebrities(data.celebrities)
       } else if (Array.isArray(data)) {
@@ -53,7 +49,12 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [addToast])
+
+  // DÜZELTME: useEffect bağımlılık dizisine fetchCelebrities eklendi
+  useEffect(() => {
+    fetchCelebrities()
+  }, [fetchCelebrities])
 
   const handleDelete = async (celebrity: Celebrity) => {
     setDeletingId(celebrity.id)
@@ -90,13 +91,11 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ Admin Panel</h1>
           <p className="text-gray-600">Ünlü biyografilerini yönetin</p>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
@@ -109,7 +108,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Toolbar */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-gray-900">Ünlü Listesi</h2>
@@ -122,7 +120,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Table */}
         {celebrities.length === 0 ? (
           <div className="bg-white rounded-lg shadow text-center py-12">
             <div className="text-6xl mb-4">👥</div>
@@ -179,7 +176,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Delete Modal */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">

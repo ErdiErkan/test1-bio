@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import SearchBar from '@/components/ui/SearchBar'
 import CelebrityGrid from '@/components/home/CelebrityGrid'
 import { prisma } from '@/lib/db'
@@ -6,41 +7,22 @@ import { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 
-// SEO Metadata
 export const metadata: Metadata = {
   title: 'CelebHub - Ünlü Biyografileri',
   description: 'Favori ünlülerinizin hayat hikayelerini keşfedin. Detaylı biyografiler, kariyer bilgileri ve daha fazlası.',
 }
 
-// Celebrity listesini getir
 async function getCelebrities(search?: string) {
   try {
     const celebrities = await prisma.celebrity.findMany({
       where: search ? {
         OR: [
-          {
-            name: {
-              contains: search,
-              mode: 'insensitive'
-            }
-          },
-          {
-            profession: {
-              contains: search,
-              mode: 'insensitive'
-            }
-          },
-          {
-            bio: {
-              contains: search,
-              mode: 'insensitive'
-            }
-          }
+          { name: { contains: search, mode: 'insensitive' } },
+          { profession: { contains: search, mode: 'insensitive' } },
+          { bio: { contains: search, mode: 'insensitive' } }
         ]
       } : {},
-      orderBy: {
-        createdAt: 'desc'
-      },
+      orderBy: { createdAt: 'desc' },
       take: 12,
       select: {
         id: true,
@@ -58,7 +40,6 @@ async function getCelebrities(search?: string) {
   }
 }
 
-// Loading komponenti
 function LoadingGrid() {
   return (
     <div>
@@ -72,7 +53,6 @@ function LoadingGrid() {
   )
 }
 
-// Celebrities wrapper komponenti
 async function CelebritiesWrapper({ search }: { search?: string }) {
   const celebrities = await getCelebrities(search)
   
@@ -86,12 +66,13 @@ async function CelebritiesWrapper({ search }: { search?: string }) {
         <p className="text-gray-500 mb-6">
           &quot;{search}&quot; için herhangi bir ünlü bulunamadı.
         </p>
-        <a
+        {/* DÜZELTME: <a> etiketi <Link> ile değiştirildi */}
+        <Link
           href="/"
           className="inline-block bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors"
         >
           Tüm Ünlüleri Görüntüle
-        </a>
+        </Link>
       </div>
     )
   }
@@ -103,20 +84,16 @@ async function CelebritiesWrapper({ search }: { search?: string }) {
   return <CelebrityGrid celebrities={celebrities} title={title} />
 }
 
-// Props tipi - Next.js 14+ için
 interface HomePageProps {
   searchParams: Promise<{ search?: string }>
 }
 
-// Ana sayfa komponenti
 export default async function HomePage({ searchParams }: HomePageProps) {
-  // Next.js 14+ async searchParams
   const params = await searchParams
   const search = params?.search
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
@@ -130,25 +107,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             clearAfterSearch={false}
           />
           
-          {/* Aktif arama göstergesi */}
           {search && (
             <div className="mt-4">
               <span className="inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full text-sm">
                 Aranan: &quot;{search}&quot;
-                <a 
+                {/* DÜZELTME: <a> etiketi <Link> ile değiştirildi */}
+                <Link 
                   href="/" 
                   className="hover:text-yellow-300 transition-colors"
                   title="Aramayı temizle"
                 >
                   ✕
-                </a>
+                </Link>
               </span>
             </div>
           )}
         </div>
       </section>
 
-      {/* Content Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Suspense fallback={<LoadingGrid />}>
           <CelebritiesWrapper search={search} />

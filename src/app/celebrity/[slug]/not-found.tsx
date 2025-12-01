@@ -16,7 +16,7 @@ export default function NotFound() {
         </h1>
 
         <p className="text-gray-600 mb-8">
-          Aradığınız ünlü bulunamadı. URL'yi kontrol edin veya ana sayfadan tekrar deneyin.
+          Aradığınız ünlü bulunamadı. URL&apos;yi kontrol edin veya ana sayfadan tekrar deneyin.
         </p>
 
         <div className="space-y-4">

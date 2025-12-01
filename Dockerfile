@@ -8,9 +8,10 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies with legacy peer deps flag for compatibility
-RUN npm ci --legacy-peer-deps --omit=dev || \
-    npm install --legacy-peer-deps --omit=dev
+# DÜZELTME BURADA: --omit=dev parametresini kaldırdık.
+# Build alabilmek için devDependencies (prisma, typescript vb.) gereklidir.
+RUN npm ci --legacy-peer-deps || \
+    npm install --legacy-peer-deps
 
 # Rebuild the source code only when needed
 FROM node:20-alpine AS builder
@@ -24,6 +25,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma Client
+# Artık yerel prisma versiyonunu (6.1.0) kullanacak
 RUN npx prisma generate
 
 # Build Next.js
@@ -57,7 +59,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma files
+# Copy Prisma files - Bu kısım doğruydu, aynen kalıyor
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma

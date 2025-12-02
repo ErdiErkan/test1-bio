@@ -7,7 +7,6 @@ import { validateCelebrityForm } from '@/lib/validations'
 import { uploadImage } from '@/actions/upload'
 import { createCelebrity, updateCelebrity } from '@/actions/celebrities'
 import { getCategories } from '@/actions/categories'
-import Image from 'next/image'
 
 interface Celebrity {
   id: string
@@ -48,6 +47,10 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
   const [categories, setCategories] = useState<Category[]>([])
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>(celebrity?.image || '')
+  
+  // Önizleme hatası için state
+  const [previewError, setPreviewError] = useState(false)
+  
   const [errors, setErrors] = useState<{[key: string]: string}>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
@@ -93,7 +96,9 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     // Preview oluştur
     const reader = new FileReader()
     reader.onloadend = () => {
-      setImagePreview(reader.result as string)
+      const result = reader.result as string
+      setPreviewError(false) // Hatayı sıfırla
+      setImagePreview(result) // Yeni preview'ı set et
     }
     reader.readAsDataURL(file)
   }
@@ -110,7 +115,6 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validation
     const validationErrors = validateCelebrityForm({
       ...formData,
       image: imagePreview || formData.image
@@ -148,7 +152,6 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         setIsUploadingImage(false)
       }
 
-      // Celebrity oluştur/güncelle
       const celebrityData = {
         name: formData.name,
         profession: formData.profession,
@@ -234,7 +237,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           )}
         </div>
 
-        {/* Kategoriler - Multi Select */}
+        {/* Kategoriler */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Kategoriler
@@ -261,9 +264,8 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           </div>
         </div>
 
-        {/* İki kolon */}
+        {/* Doğum Bilgileri */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Doğum Tarihi */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Doğum Tarihi
@@ -277,12 +279,8 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
                 errors.birthDate ? 'border-red-500' : 'border-gray-300'
               }`}
             />
-            {errors.birthDate && (
-              <p className="mt-1 text-sm text-red-600">{errors.birthDate}</p>
-            )}
           </div>
 
-          {/* Doğum Yeri */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Doğum Yeri
@@ -297,29 +295,37 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
               }`}
               placeholder="Örn: İstanbul, Türkiye"
             />
-            {errors.birthPlace && (
-              <p className="mt-1 text-sm text-red-600">{errors.birthPlace}</p>
-            )}
           </div>
         </div>
 
-        {/* Resim Upload */}
+        {/* Resim Upload Alanı */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Resim
           </label>
 
-          {imagePreview && (
-            <div className="mb-4">
-              <Image
+          <div className="mb-4 w-[200px] h-[300px] bg-gray-100 rounded-lg overflow-hidden border border-gray-200 relative shadow-sm">
+            {imagePreview && !previewError ? (
+              // KEY prop'u eklendi: imagePreview değiştiğinde img etiketini zorla yeniden oluşturur
+              <img
+                key={imagePreview}
                 src={imagePreview}
                 alt="Preview"
-                width={200}
-                height={200}
-                className="rounded-lg object-cover"
+                className="w-full h-full object-cover"
+                onError={() => setPreviewError(true)}
               />
-            </div>
-          )}
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-blue-600">
+                {formData.name ? (
+                  <span className="text-6xl font-bold text-white select-none">
+                    {formData.name.charAt(0).toUpperCase()}
+                  </span>
+                ) : (
+                  <span className="text-4xl text-white">📷</span>
+                )}
+              </div>
+            )}
+          </div>
 
           <input
             type="file"
@@ -347,9 +353,6 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
             }`}
             placeholder="Ünlü hakkında bilgi yazın..."
           />
-          {errors.bio && (
-            <p className="mt-1 text-sm text-red-600">{errors.bio}</p>
-          )}
           <p className="mt-1 text-sm text-gray-500">
             {formData.bio?.length || 0}/5000 karakter
           </p>

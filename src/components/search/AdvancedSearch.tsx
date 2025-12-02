@@ -34,7 +34,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
-  const debounceTimer = useRef<NodeJS.Timeout>()
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Dışarı tıklayınca autocomplete kapat
   useEffect(() => {
@@ -113,7 +113,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ünlü ara (Örn: Kemal Sunal, oyuncu...)"
-            className="w-full px-6 py-4 pr-12 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+            className="w-full px-6 py-4 pr-12 text-lg text-gray-900 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
           />
           <button
             type="submit"
@@ -210,7 +210,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
       {/* Aktif Filtreler */}
       {(query || selectedCategory) && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-600">Aktif filtreler:</span>
+          <span className="text-white font-medium">Aktif filtreler:</span>
           {query && (
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
               Arama: {query}

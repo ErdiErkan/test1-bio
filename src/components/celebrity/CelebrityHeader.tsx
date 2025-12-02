@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from 'react'
 import Image from 'next/image'
 
 interface Celebrity {
@@ -15,6 +18,8 @@ interface CelebrityHeaderProps {
 }
 
 export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
+  const [imageError, setImageError] = useState(false)
+
   const formatDate = (dateString?: Date | string | null) => {
     if (!dateString) return null
     return new Date(dateString).toLocaleDateString('tr-TR', {
@@ -45,18 +50,20 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
       <div className="md:flex">
         {/* Fotoğraf */}
         <div className="md:w-1/3">
-          <div className="aspect-[3/4] relative bg-gray-100">
-            {celebrity.image ? (
-              <Image
-                src={celebrity.image}
+          <div className="aspect-[3/4] relative bg-gray-100 flex items-center justify-center overflow-hidden">
+            {celebrity.image && !imageError ? (
+              <img
+                // DÜZELTME: Cache busting eklendi
+                src={`${celebrity.image}?v=${new Date().getTime()}`}
                 alt={celebrity.name}
-                fill
-                className="object-cover"
-                priority
+                className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-9xl text-gray-400">👤</div>
+              <div className="w-full h-full flex items-center justify-center bg-blue-600">
+                <span className="text-9xl font-bold text-white select-none">
+                  {celebrity.name.charAt(0).toUpperCase()}
+                </span>
               </div>
             )}
           </div>

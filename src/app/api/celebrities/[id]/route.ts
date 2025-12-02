@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 function createSlug(text: string): string {
   const turkishMap: Record<string, string> = {
     'ç': 'c', 'Ç': 'C',

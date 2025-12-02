@@ -55,12 +55,9 @@ RUN mkdir -p /app/.next /app/public/uploads && \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
-# EKLENEN KISIM: sharp'ı linux-musl (Alpine) için spesifik olarak ekle
-RUN npm install --omit=dev && \
-    npm install sharp
-
-# EKLENEN KISIM: Eksik production paketlerini yükle (bcryptjs vb.)
-RUN npm install --omit=dev
+# Install production dependencies with Alpine-optimized sharp
+RUN npm install --omit=dev --legacy-peer-deps && \
+    npm install --platform=linux --arch=x64 sharp
 
 # Copy built application
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

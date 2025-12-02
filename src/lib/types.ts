@@ -1,3 +1,13 @@
+// Category type
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  description?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 // Core Celebrity type from Prisma
 export interface Celebrity {
   id: string
@@ -10,6 +20,7 @@ export interface Celebrity {
   slug: string
   createdAt: Date
   updatedAt: Date
+  categories?: Category[]
 }
 
 // Form data type for create/update operations
@@ -20,6 +31,7 @@ export interface CelebrityFormData {
   birthPlace?: string
   bio?: string
   image?: string
+  categoryIds?: string[]
 }
 
 // API Response types for better type safety

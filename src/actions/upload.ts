@@ -5,7 +5,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads')
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
 
 export async function uploadImage(formData: FormData): Promise<{
@@ -32,19 +32,26 @@ export async function uploadImage(formData: FormData): Promise<{
     if (file.size > MAX_FILE_SIZE) {
       return {
         success: false,
-        error: 'Dosya boyutu maksimum 5MB olabilir',
+        error: 'Dosya boyutu maksimum 2MB olabilir',
       }
     }
 
-    // Uploads klasörünü oluştur (yoksa)
+    // Klasör kontrolü ve oluşturma
     if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true })
+      try {
+        await mkdir(UPLOAD_DIR, { recursive: true })
+      } catch (err) {
+        console.error('Klasör oluşturma hatası:', err)
+        return { success: false, error: 'Sunucu yazma izni hatası (Klasör)' }
+      }
     }
 
     // Benzersiz dosya adı oluştur
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 15)
-    const extension = file.name.split('.').pop()
+    // Dosya adındaki Türkçe karakterleri ve boşlukları temizleyelim
+    const originalName = file.name.replace(/[^a-zA-Z0-9.]/g, '')
+    const extension = originalName.split('.').pop()
     const fileName = `${timestamp}-${randomString}.${extension}`
 
     // Dosyayı kaydet
@@ -52,8 +59,15 @@ export async function uploadImage(formData: FormData): Promise<{
     const buffer = Buffer.from(bytes)
     const filePath = join(UPLOAD_DIR, fileName)
 
-    await writeFile(filePath, buffer)
+    try {
+      await writeFile(filePath, buffer)
+    } catch (err) {
+      console.error('Dosya yazma hatası:', err)
+      return { success: false, error: 'Sunucu yazma izni hatası (Dosya)' }
+    }
 
+    // await writeFile(filePath, buffer) eski halinden kaldı işe yararsa silinecek
+  
     // Public URL oluştur
     const imagePath = `/uploads/${fileName}`
 

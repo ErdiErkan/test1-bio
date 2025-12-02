@@ -2,15 +2,16 @@
 const nextConfig = {
   // Image optimization
   images: {
+    // Docker ortamında işlemci/bellek sorunlarını aşmak için optimizasyonu kapatıyoruz
+    unoptimized: true, // Nginx direkt dosya sunacağı için bu TRUE olmalı
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**',
       },
     ],
+    // formats ve sizes dizileri unoptimized: true iken yok sayılır, kalabilirler.
     formats: ['image/avif', 'image/webp'],
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
   // Production optimizations

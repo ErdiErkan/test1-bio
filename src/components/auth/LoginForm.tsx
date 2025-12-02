@@ -1,18 +1,25 @@
 'use client'
 
-import { useState } from 'react'
-import { signIn } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/admin'
 
+  const [callbackUrl, setCallbackUrl] = useState('/admin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // URL parametrelerini client-side'da güvenli şekilde al
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const url = params.get('callbackUrl')
+      if (url) setCallbackUrl(url)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,25 +27,59 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
+      // 1. CSRF Token'ı al
+      const csrfRes = await fetch('/api/auth/csrf', { method: 'GET' })
+      if (!csrfRes.ok) {
+        throw new Error('CSRF token alınamadı')
+      }
+
+      const csrfData = await csrfRes.json()
+      const csrfToken = csrfData?.csrfToken
+
+      if (!csrfToken) {
+        throw new Error('CSRF token bulunamadı')
+      }
+
+      // 2. Manuel giriş isteği gönder (next-auth/react bağımlılığı olmadan)
+      const res = await fetch('/api/auth/callback/credentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          csrfToken,
+          email,
+          password,
+          json: 'true',
+        }),
       })
 
-      if (result?.error) {
+      const data = await res.json().catch(() => ({}))
+
+      // NextAuth bazen 200 dönse bile body içinde hata dönebiliyor
+      if (!res.ok || data?.error) {
+        throw new Error(data?.message || 'Giriş başarısız')
+      }
+
+      // Hata kontrolü (NextAuth bazen 200 dönüp url içinde error parametresi verebilir)
+      if (data?.url && typeof data.url === 'string' && data.url.includes('error=')) {
         setError('Email veya şifre hatalı')
         setIsLoading(false)
         return
       }
 
-      if (result?.ok) {
-        router.push(callbackUrl)
-        router.refresh()
-      }
-    } catch (error) {
-      console.error('Login error:', error)
-      setError('Bir hata oluştu')
+      // 3. Başarılı giriş sonrası: önce client state'i güncelle, sonra tam sayfa yönlendir
+      const targetUrl =
+        (data?.url && typeof data.url === 'string' ? data.url : callbackUrl) || '/admin'
+
+      // App Router state'ini güncelle
+      router.refresh()
+
+      // Tam sayfa yenileme + geçmişi kirletmemek için replace
+      window.location.replace(targetUrl)
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Email veya şifre hatalı')
       setIsLoading(false)
     }
   }

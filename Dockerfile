@@ -55,6 +55,10 @@ RUN mkdir -p /app/.next /app/public/uploads && \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# EKLENEN KISIM: sharp'ı linux-musl (Alpine) için spesifik olarak ekle
+RUN npm install --omit=dev && \
+    npm install sharp
+
 # EKLENEN KISIM: Eksik production paketlerini yükle (bcryptjs vb.)
 RUN npm install --omit=dev
 
@@ -67,12 +71,21 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
+# ----------------- KRİTİK DÜZELTME BAŞLANGICI -----------------
+# Uploads klasörünü oluştur ve izinleri nextjs kullanıcısına ver.
+# Bu, volume mount edilse bile sahipliğin doğru başlamasına yardımcı olur.
+RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public
+# ----------------- KRİTİK DÜZELTME BİTİŞİ ---------------------
+
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# Bu satırı ekleyerek imajın kendisini güvenli hale getiriyoruz:
+ENV AUTH_TRUST_HOST=true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

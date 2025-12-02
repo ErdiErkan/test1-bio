@@ -12,7 +12,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-celebrity_db}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - '5433:5432'  # External:Internal - Avoid conflict with host PostgreSQL
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -30,19 +30,34 @@ services:
       dockerfile: Dockerfile
     container_name: celebhub_app
     restart: unless-stopped
-    ports:
-      - '3000:3000'
+    # Dış dünyaya port açmıyoruz, sadece Nginx erişecek
+    expose:
+      - '3000'
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/celebrity_db
-      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+
+      # Site URL artık domain + https
+      - NEXT_PUBLIC_SITE_URL=https://whoo.bio
       - NEXT_PUBLIC_APP_NAME=CelebHub
+
+      # Auth yönlendirmeleri
+      - NEXTAUTH_URL=https://whoo.bio
+
+      # --- SECRET AYARLARI (GERÇEKTEN EŞİTLENMİŞ) ---
+      - AUTH_SECRET=${AUTH_SECRET:-supergizlibirkey123456changeinprod}
+      - NEXTAUTH_SECRET=${AUTH_SECRET:-supergizlibirkey123456changeinprod}
+
+      # "UntrustedHost" hatasını çözen satır
+      - AUTH_TRUST_HOST=true
+
     depends_on:
       postgres:
         condition: service_healthy
     command: >
       sh -c "npx -y prisma@6 db push --skip-generate && npx -y prisma@6 db seed && node server.js"
     volumes:
+      # Uploads klasörünü paylaşıma açıyoruz
       - uploads_data:/app/public/uploads
     networks:
       - celebhub_network
@@ -52,6 +67,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: celebhub_nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'   # HTTP -> HTTPS yönlendirme
+      - '443:443' # HTTPS
+    volumes:
+      # Nginx ayar dosyası
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Uploads klasörüne Nginx'in de erişmesi gerek (Read-Only)
+      - uploads_data:/usr/share/nginx/html/uploads:ro
+      # SSL sertifikaları (Cloudflare origin certs)
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+    networks:
+      - celebhub_network
 
 networks:
   celebhub_network:

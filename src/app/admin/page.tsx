@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import Image from 'next/image' // Image kullanılmıyor ama import kalabilir veya silinebilir
 import { useToast } from '@/hooks/useToast'
 
 interface Celebrity {
@@ -15,6 +15,32 @@ interface Celebrity {
   createdAt: string
 }
 
+// YENİ EKLENEN PARÇA: Akıllı Avatar Bileşeni
+// Bu bileşen resim yüklenemezse (hata verirse) otomatik olarak baş harfi gösterir
+const CelebrityAvatar = ({ url, name }: { url?: string | null, name: string }) => {
+  const [error, setError] = useState(false)
+
+  // URL var ve henüz hata alınmadıysa resmi dene
+  if (url && !error) {
+    return (
+      <img
+        // DÜZELTME: Cache busting için timestamp eklendi
+        src={`${url}?v=${new Date().getTime()}`}
+        alt={name}
+        className="h-10 w-10 rounded-full object-cover border border-gray-200"
+        onError={() => setError(true)}
+      />
+    )
+  }
+
+  // URL yoksa veya resim yüklenirken hata olduysa baş harfi göster
+  return (
+    <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+      {name.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [celebrities, setCelebrities] = useState<Celebrity[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,10 +48,16 @@ export default function AdminPage() {
   const [showDeleteModal, setShowDeleteModal] = useState<Celebrity | null>(null)
   const { addToast } = useToast()
 
-  // DÜZELTME: Fonksiyon useCallback içine alındı
   const fetchCelebrities = useCallback(async () => {
     try {
-      const response = await fetch('/api/celebrities?limit=50')
+      // DÜZELTME: cache: 'no-store' eklendi
+      const response = await fetch('/api/celebrities?limit=50', {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      })
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -51,7 +83,6 @@ export default function AdminPage() {
     }
   }, [addToast])
 
-  // DÜZELTME: useEffect bağımlılık dizisine fetchCelebrities eklendi
   useEffect(() => {
     fetchCelebrities()
   }, [fetchCelebrities])
@@ -167,11 +198,8 @@ export default function AdminPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          {celebrity.image ? (
-                            <Image src={celebrity.image} alt={celebrity.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
-                          ) : (
-                            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-lg">👤</div>
-                          )}
+                          {/* GÜNCELLENEN KISIM: CelebrityAvatar Kullanımı */}
+                          <CelebrityAvatar url={celebrity.image} name={celebrity.name} />
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{celebrity.name}</div>

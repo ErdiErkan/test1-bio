@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { prisma } from '@/lib/db'
 import CategoriesManager from '@/components/admin/CategoriesManager'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Kategori Yönetimi - Admin',
   description: 'Kategorileri yönetin',

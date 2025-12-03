@@ -55,7 +55,7 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "npx prisma db push --skip-generate && npx prisma db seed && node server.js"
+      sh -c "npx prisma migrate deploy && (npx prisma db seed || true) && node server.js"
     volumes:
       # Uploads klasörünü paylaşıma açıyoruz
       - uploads_data:/app/public/uploads

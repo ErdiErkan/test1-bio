@@ -7,13 +7,16 @@ import { validateCelebrityForm } from '@/lib/validations'
 import { uploadImage } from '@/actions/upload'
 import { createCelebrity, updateCelebrity } from '@/actions/celebrities'
 import { getCategories } from '@/actions/categories'
+import { getAllCountries } from '@/lib/celebrity'
 
 interface Celebrity {
   id: string
   name: string
+  nickname?: string | null
   profession?: string | null
   birthDate?: Date | string | null
   birthPlace?: string | null
+  nationality?: string | null
   bio?: string | null
   image?: string | null
   categories?: { id: string; name: string }[]
@@ -36,9 +39,11 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
 
   const [formData, setFormData] = useState({
     name: celebrity?.name || '',
+    nickname: celebrity?.nickname || '',
     profession: celebrity?.profession || '',
     birthDate: celebrity?.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
     birthPlace: celebrity?.birthPlace || '',
+    nationality: celebrity?.nationality || '',
     bio: celebrity?.bio || '',
     image: celebrity?.image || '',
     categoryIds: celebrity?.categories?.map(c => c.id) || []
@@ -154,9 +159,11 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
 
       const celebrityData = {
         name: formData.name,
+        nickname: formData.nickname,
         profession: formData.profession,
         birthDate: formData.birthDate,
         birthPlace: formData.birthPlace,
+        nationality: formData.nationality,
         bio: formData.bio,
         image: imagePath,
         categoryIds: formData.categoryIds
@@ -217,6 +224,26 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           )}
         </div>
 
+        {/* Takma Ad */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Takma Ad / Lakap
+          </label>
+          <input
+            type="text"
+            name="nickname"
+            value={formData.nickname}
+            onChange={handleChange}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              errors.nickname ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="Örn: Turist Ömer"
+          />
+          {errors.nickname && (
+            <p className="mt-1 text-sm text-red-600">{errors.nickname}</p>
+          )}
+        </div>
+
         {/* Meslek */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -234,6 +261,31 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           />
           {errors.profession && (
             <p className="mt-1 text-sm text-red-600">{errors.profession}</p>
+          )}
+        </div>
+
+        {/* Uyruk */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Uyruk / Vatandaşlık
+          </label>
+          <select
+            name="nationality"
+            value={formData.nationality}
+            onChange={(e) => handleChange(e as any)}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              errors.nationality ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Seçiniz...</option>
+            {getAllCountries().map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.flag} {country.name}
+              </option>
+            ))}
+          </select>
+          {errors.nationality && (
+            <p className="mt-1 text-sm text-red-600">{errors.nationality}</p>
           )}
         </div>
 

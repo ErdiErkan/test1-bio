@@ -2,8 +2,6 @@ interface Celebrity {
   id: string
   name: string
   bio?: string | null
-  createdAt: Date | string
-  updatedAt: Date | string
 }
 
 interface CelebrityInfoProps {
@@ -11,10 +9,6 @@ interface CelebrityInfoProps {
 }
 
 export default function CelebrityInfo({ celebrity }: CelebrityInfoProps) {
-  const formatDate = (dateString: Date | string) => {
-    return new Date(dateString).toLocaleDateString('tr-TR')
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-lg p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -38,14 +32,6 @@ export default function CelebrityInfo({ celebrity }: CelebrityInfoProps) {
           </p>
         </div>
       )}
-
-      {/* Meta Bilgiler */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <div className="text-sm text-gray-500 space-y-1">
-          <p>📅 Oluşturulma: {formatDate(celebrity.createdAt)}</p>
-          <p>🔄 Son Güncelleme: {formatDate(celebrity.updatedAt)}</p>
-        </div>
-      </div>
     </div>
   )
 }

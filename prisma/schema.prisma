@@ -49,9 +49,11 @@ model Category {
 model Celebrity {
   id          String   @id @default(cuid())
   name        String   @db.VarChar(255)
+  nickname    String?  @db.VarChar(255)
   profession  String?  @db.VarChar(255)
   birthDate   DateTime?
   birthPlace  String?  @db.VarChar(255)
+  nationality String?  @db.VarChar(10)
   bio         String?  @db.Text
   image       String?  @db.VarChar(1000)
   slug        String   @unique @db.VarChar(300)
@@ -64,6 +66,7 @@ model Celebrity {
   // Performance indexes
   @@index([name])
   @@index([profession])
+  @@index([nationality])
   @@index([createdAt(sort: Desc)])
   @@index([slug])
 

@@ -5,9 +5,11 @@ import BackButton from '../ui/BackButton'
 interface Celebrity {
   id: string
   name: string
+  nickname?: string | null
   profession?: string | null
   birthDate?: Date | string | null
   birthPlace?: string | null
+  nationality?: string | null
   bio?: string | null
   image?: string | null
   slug: string

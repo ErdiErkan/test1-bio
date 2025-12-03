@@ -83,9 +83,11 @@ export async function searchCelebrities({
 
 export async function createCelebrity(data: {
   name: string
+  nickname?: string
   profession?: string
   birthDate?: string
   birthPlace?: string
+  nationality?: string
   bio?: string
   image?: string
   categoryIds: string[]
@@ -117,9 +119,11 @@ export async function createCelebrity(data: {
       data: {
         name: data.name.trim(),
         slug,
+        nickname: data.nickname?.trim() || null,
         profession: data.profession?.trim() || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
         birthPlace: data.birthPlace?.trim() || null,
+        nationality: data.nationality?.trim() || null,
         bio: data.bio?.trim() || null,
         image: data.image?.trim() || null,
         categories: {
@@ -144,9 +148,11 @@ export async function updateCelebrity(
   id: string,
   data: {
     name: string
+    nickname?: string
     profession?: string
     birthDate?: string
     birthPlace?: string
+    nationality?: string
     bio?: string
     image?: string
     categoryIds: string[]
@@ -192,9 +198,11 @@ export async function updateCelebrity(
       data: {
         name: data.name.trim(),
         slug,
+        nickname: data.nickname?.trim() || null,
         profession: data.profession?.trim() || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
         birthPlace: data.birthPlace?.trim() || null,
+        nationality: data.nationality?.trim() || null,
         bio: data.bio?.trim() || null,
         image: data.image?.trim() || null,
         categories: {

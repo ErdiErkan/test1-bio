@@ -15,6 +15,7 @@ interface Celebrity {
   nationality?: string | null
   image?: string | null
   slug: string
+  updatedAt?: Date | string // EKLENDİ: Cache kontrolü için gerekli
 }
 
 interface CelebrityHeaderProps {
@@ -55,6 +56,13 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
   const birthYear = birthDate?.getFullYear()
   const birthDay = birthDate ? `${birthDate.getDate()}-${birthDate.getMonth() + 1}` : null
 
+  // DÜZELTME: Sabit bir versiyon numarası oluşturuyoruz
+  // Eğer updatedAt varsa onu kullan, yoksa sabit '1' kullan. 
+  // Bu sayede sunucu ve client aynı değeri üretir.
+  const imageVersion = celebrity.updatedAt 
+    ? new Date(celebrity.updatedAt).getTime() 
+    : '1'
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       <div className="md:flex">
@@ -63,8 +71,8 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
           <div className="aspect-[3/4] relative bg-gray-100 flex items-center justify-center overflow-hidden">
             {celebrity.image && !imageError ? (
               <img
-                // DÜZELTME: Cache busting eklendi
-                src={`${celebrity.image}?v=${new Date().getTime()}`}
+                // DÜZELTME: new Date().getTime() yerine imageVersion kullanıldı
+                src={`${celebrity.image}?v=${imageVersion}`}
                 alt={celebrity.name}
                 className="w-full h-full object-cover"
                 onError={() => setImageError(true)}

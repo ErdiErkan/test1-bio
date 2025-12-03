@@ -42,7 +42,7 @@ services:
       # Auth yönlendirmeleri
       - NEXTAUTH_URL=https://whoo.bio
 
-      # --- SECRET AYARLARI (GERÇEKTEN EŞİTLENMİŞ) ---
+      # --- SECRET AYARLARI ---
       - AUTH_SECRET=${AUTH_SECRET:-supergizlibirkey123456changeinprod}
       - NEXTAUTH_SECRET=${AUTH_SECRET:-supergizlibirkey123456changeinprod}
 
@@ -52,8 +52,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: >
-      sh -c "npx prisma migrate deploy && (npx prisma db seed || true) && node server.js"
+    
+    # ----------------- GÜNCELLEME -----------------
+    # command satırını TAMAMEN kaldırdık. 
+    # Dockerfile içindeki CMD ["./start.sh"] çalışacak.
+    
     volumes:
       # Uploads klasörünü paylaşıma açıyoruz
       - uploads_data:/app/public/uploads

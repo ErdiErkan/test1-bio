@@ -1,19 +1,18 @@
 # Multi-stage build for optimal image size
 FROM node:20-alpine AS deps
 
-# Install dependencies only when needed
+# Install dependencies
 RUN apk add --no-cache libc6-compat openssl python3 make g++
 WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# DÜZELTME BURADA: --omit=dev parametresini kaldırdık.
-# Build alabilmek için devDependencies (prisma, typescript vb.) gereklidir.
+# Install dependencies (Prisma here comes from package.json dependencies)
 RUN npm ci --legacy-peer-deps || \
     npm install --legacy-peer-deps
 
-# Rebuild the source code only when needed
+# Rebuild the source code
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -25,7 +24,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma Client
-# Artık yerel prisma versiyonunu (6.1.0) kullanacak
 RUN npx prisma generate
 
 # Build Next.js
@@ -33,29 +31,28 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Production image
 FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install runtime dependencies
-RUN apk add --no-cache curl wget
+# ----------------- GÜNCELLEME -----------------
+# libc6-compat: Prisma motorunun doğru çalışması için kritik
+RUN apk add --no-cache curl wget netcat-openbsd ca-certificates openssl libc6-compat
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 # Create necessary directories
-RUN mkdir -p /app/.next /app/public/uploads && \
-    chown -R nextjs:nodejs /app
+RUN mkdir -p /app/.next /app/public/uploads
 
-# Copy necessary files
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+# Copy package files
+COPY --from=builder /app/package.json ./package.json
 
-# Install production dependencies with Alpine-optimized sharp
+# Install production dependencies
 RUN npm install --omit=dev --legacy-peer-deps && \
     npm install --platform=linux --arch=x64 sharp
 
@@ -63,16 +60,15 @@ RUN npm install --omit=dev --legacy-peer-deps && \
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma files - Bu kısım doğruydu, aynen kalıyor
+# Copy Prisma files
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
-# ----------------- KRİTİK DÜZELTME BAŞLANGICI -----------------
-# Uploads klasörünü oluştur ve izinleri nextjs kullanıcısına ver.
-# Bu, volume mount edilse bile sahipliğin doğru başlamasına yardımcı olur.
-RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public
-# ----------------- KRİTİK DÜZELTME BİTİŞİ ---------------------
+# Copy start script
+COPY --chown=nextjs:nodejs start.sh ./start.sh
+RUN chmod +x ./start.sh
+
+# Permissions
+RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
@@ -80,12 +76,7 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-# Bu satırı ekleyerek imajın kendisini güvenli hale getiriyoruz:
 ENV AUTH_TRUST_HOST=true
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1
-
-CMD ["node", "server.js"]
+# Entrypoint
+CMD ["./start.sh"]

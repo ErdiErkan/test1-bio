@@ -162,6 +162,3 @@ src/
 -----
 
 MIT Lisansı ile lisanslanmıştır.
-
-```
-```

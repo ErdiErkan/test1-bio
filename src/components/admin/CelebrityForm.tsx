@@ -8,6 +8,42 @@ import { uploadImage } from '@/actions/upload'
 import { createCelebrity, updateCelebrity } from '@/actions/celebrities'
 import { getCategories } from '@/actions/categories'
 import { getAllCountries } from '@/lib/celebrity'
+import type { SocialPlatform } from '@/lib/types'
+
+// Social Link form state tipi
+interface SocialLinkFormItem {
+  id: string // Benzersiz key için geçici ID
+  platform: SocialPlatform | ''
+  url: string
+}
+
+// Platform konfigürasyonu
+const SOCIAL_PLATFORMS: {
+  value: SocialPlatform
+  label: string
+  placeholder: string
+  icon: string
+}[] = [
+  { value: 'INSTAGRAM', label: 'Instagram', placeholder: 'https://instagram.com/kullaniciadi', icon: '📷' },
+  { value: 'TWITTER', label: 'Twitter / X', placeholder: 'https://twitter.com/kullaniciadi', icon: '𝕏' },
+  { value: 'YOUTUBE', label: 'YouTube', placeholder: 'https://youtube.com/@kanal', icon: '▶️' },
+  { value: 'TIKTOK', label: 'TikTok', placeholder: 'https://tiktok.com/@kullaniciadi', icon: '🎵' },
+  { value: 'FACEBOOK', label: 'Facebook', placeholder: 'https://facebook.com/sayfa', icon: '👤' },
+  { value: 'LINKEDIN', label: 'LinkedIn', placeholder: 'https://linkedin.com/in/kullaniciadi', icon: '💼' },
+  { value: 'WEBSITE', label: 'Website', placeholder: 'https://www.ornek.com', icon: '🌐' },
+  { value: 'IMDB', label: 'IMDb', placeholder: 'https://imdb.com/name/nm123456', icon: '🎬' },
+  { value: 'SPOTIFY', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/...', icon: '🎧' },
+]
+
+// Unique ID generator
+const generateId = () => Math.random().toString(36).substring(2, 9)
+
+interface SocialMediaLink {
+  id: string
+  platform: SocialPlatform
+  url: string
+  displayOrder: number
+}
 
 interface Celebrity {
   id: string
@@ -20,6 +56,7 @@ interface Celebrity {
   bio?: string | null
   image?: string | null
   categories?: { id: string; name: string }[]
+  socialMediaLinks?: SocialMediaLink[]
 }
 
 interface CelebrityFormProps {
@@ -49,14 +86,27 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     categoryIds: celebrity?.categories?.map(c => c.id) || []
   })
 
+  // Social Links state - mevcut verileri yükle veya boş başla
+  const [socialLinks, setSocialLinks] = useState<SocialLinkFormItem[]>(() => {
+    if (celebrity?.socialMediaLinks && celebrity.socialMediaLinks.length > 0) {
+      return celebrity.socialMediaLinks.map(link => ({
+        id: generateId(),
+        platform: link.platform,
+        url: link.url
+      }))
+    }
+    return []
+  })
+
   const [categories, setCategories] = useState<Category[]>([])
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>(celebrity?.image || '')
-  
+
   // Önizleme hatası için state
   const [previewError, setPreviewError] = useState(false)
-  
+
   const [errors, setErrors] = useState<{[key: string]: string}>({})
+  const [socialLinkErrors, setSocialLinkErrors] = useState<{[key: string]: string}>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
 
@@ -117,6 +167,90 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     }))
   }
 
+  // ========== Sosyal Medya Handler'ları ==========
+
+  // Yeni sosyal medya satırı ekle
+  const handleAddSocialLink = () => {
+    setSocialLinks(prev => [...prev, { id: generateId(), platform: '', url: '' }])
+  }
+
+  // Sosyal medya satırını sil
+  const handleRemoveSocialLink = (id: string) => {
+    setSocialLinks(prev => prev.filter(link => link.id !== id))
+    // İlgili hata mesajını da temizle
+    setSocialLinkErrors(prev => {
+      const newErrors = { ...prev }
+      delete newErrors[`${id}-platform`]
+      delete newErrors[`${id}-url`]
+      return newErrors
+    })
+  }
+
+  // Sosyal medya platform değişikliği
+  const handleSocialPlatformChange = (id: string, platform: SocialPlatform | '') => {
+    setSocialLinks(prev =>
+      prev.map(link => (link.id === id ? { ...link, platform } : link))
+    )
+    // Platform seçilince hata temizle
+    if (platform && socialLinkErrors[`${id}-platform`]) {
+      setSocialLinkErrors(prev => ({ ...prev, [`${id}-platform`]: '' }))
+    }
+  }
+
+  // Sosyal medya URL değişikliği
+  const handleSocialUrlChange = (id: string, url: string) => {
+    setSocialLinks(prev =>
+      prev.map(link => (link.id === id ? { ...link, url } : link))
+    )
+    // URL girilince hata temizle
+    if (url && socialLinkErrors[`${id}-url`]) {
+      setSocialLinkErrors(prev => ({ ...prev, [`${id}-url`]: '' }))
+    }
+  }
+
+  // Platform için placeholder getir
+  const getPlaceholderForPlatform = (platform: SocialPlatform | ''): string => {
+    if (!platform) return 'Önce platform seçin...'
+    const config = SOCIAL_PLATFORMS.find(p => p.value === platform)
+    return config?.placeholder || 'URL girin'
+  }
+
+  // URL validasyonu
+  const isValidUrl = (url: string): boolean => {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Sosyal link validasyonu
+  const validateSocialLinks = (): boolean => {
+    const newErrors: {[key: string]: string} = {}
+    let isValid = true
+
+    socialLinks.forEach(link => {
+      // Platform kontrolü
+      if (!link.platform) {
+        newErrors[`${link.id}-platform`] = 'Platform seçin'
+        isValid = false
+      }
+
+      // URL kontrolü
+      if (!link.url.trim()) {
+        newErrors[`${link.id}-url`] = 'URL boş bırakılamaz'
+        isValid = false
+      } else if (!isValidUrl(link.url)) {
+        newErrors[`${link.id}-url`] = 'Geçerli bir URL girin'
+        isValid = false
+      }
+    })
+
+    setSocialLinkErrors(newErrors)
+    return isValid
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -125,7 +259,10 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
       image: imagePreview || formData.image
     })
 
-    if (validationErrors.length > 0) {
+    // Sosyal link validasyonu
+    const socialLinksValid = validateSocialLinks()
+
+    if (validationErrors.length > 0 || !socialLinksValid) {
       const errorMap = validationErrors.reduce((acc, error) => {
         acc[error.field] = error.message
         return acc
@@ -157,6 +294,15 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         setIsUploadingImage(false)
       }
 
+      // Geçerli sosyal linkleri hazırla
+      const validSocialLinks = socialLinks
+        .filter(link => link.platform && link.url.trim())
+        .map((link, index) => ({
+          platform: link.platform as SocialPlatform,
+          url: link.url.trim(),
+          displayOrder: index
+        }))
+
       const celebrityData = {
         name: formData.name,
         nickname: formData.nickname,
@@ -166,7 +312,8 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         nationality: formData.nationality,
         bio: formData.bio,
         image: imagePath,
-        categoryIds: formData.categoryIds
+        categoryIds: formData.categoryIds,
+        socialLinks: validSocialLinks
       }
 
       let result
@@ -408,6 +555,129 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           <p className="mt-1 text-sm text-gray-500">
             {formData.bio?.length || 0}/5000 karakter
           </p>
+        </div>
+
+        {/* ========== Sosyal Medya Hesapları ========== */}
+        <div className="border-t pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Sosyal Medya Hesapları
+            </label>
+            <button
+              type="button"
+              onClick={handleAddSocialLink}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors min-h-[44px]"
+            >
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              Hesap Ekle
+            </button>
+          </div>
+
+          {/* Sosyal Medya Satırları */}
+          <div className="space-y-4">
+            {socialLinks.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                Henüz sosyal medya hesabı eklenmedi. Yukarıdaki butona tıklayarak ekleyebilirsiniz.
+              </p>
+            ) : (
+              socialLinks.map((link, index) => (
+                <div
+                  key={link.id}
+                  className="flex flex-col sm:flex-row gap-3 p-4 bg-gray-50 rounded-lg"
+                >
+                  {/* Platform Select */}
+                  <div className="flex-shrink-0 w-full sm:w-48">
+                    <select
+                      value={link.platform}
+                      onChange={(e) =>
+                        handleSocialPlatformChange(link.id, e.target.value as SocialPlatform | '')
+                      }
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-h-[44px] ${
+                        socialLinkErrors[`${link.id}-platform`]
+                          ? 'border-red-500'
+                          : 'border-gray-300'
+                      }`}
+                    >
+                      <option value="">Platform Seçin</option>
+                      {SOCIAL_PLATFORMS.map((platform) => (
+                        <option key={platform.value} value={platform.value}>
+                          {platform.icon} {platform.label}
+                        </option>
+                      ))}
+                    </select>
+                    {socialLinkErrors[`${link.id}-platform`] && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {socialLinkErrors[`${link.id}-platform`]}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* URL Input */}
+                  <div className="flex-grow">
+                    <input
+                      type="url"
+                      value={link.url}
+                      onChange={(e) => handleSocialUrlChange(link.id, e.target.value)}
+                      placeholder={getPlaceholderForPlatform(link.platform)}
+                      disabled={!link.platform}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] ${
+                        socialLinkErrors[`${link.id}-url`]
+                          ? 'border-red-500'
+                          : 'border-gray-300'
+                      } ${!link.platform ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                    />
+                    {socialLinkErrors[`${link.id}-url`] && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {socialLinkErrors[`${link.id}-url`]}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Sil Butonu */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSocialLink(link.id)}
+                    className="flex-shrink-0 inline-flex items-center justify-center w-full sm:w-12 h-12 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors min-h-[44px]"
+                    title="Bu hesabı sil"
+                    aria-label="Bu sosyal medya hesabını sil"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                    <span className="sm:hidden ml-2">Sil</span>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {socialLinks.length > 0 && (
+            <p className="mt-2 text-xs text-gray-500">
+              {socialLinks.length} sosyal medya hesabı eklendi. Sıralama, eklenme sırasına göre belirlenir.
+            </p>
+          )}
         </div>
 
         {/* Butonlar */}

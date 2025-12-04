@@ -13,6 +13,9 @@ async function getCelebrity(id: string) {
             id: true,
             name: true
           }
+        },
+        socialMediaLinks: {
+          orderBy: { displayOrder: 'asc' }
         }
       }
     })

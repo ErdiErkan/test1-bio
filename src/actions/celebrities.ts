@@ -3,6 +3,14 @@
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { calculateZodiac } from '@/lib/celebrity'
+import type { SocialPlatform } from '@/lib/types'
+
+// Social Link Input type for server actions
+interface SocialLinkInput {
+  platform: SocialPlatform
+  url: string
+  displayOrder?: number
+}
 
 // Slug oluşturma fonksiyonu
 function createSlug(text: string): string {
@@ -92,6 +100,7 @@ export async function createCelebrity(data: {
   bio?: string
   image?: string
   categoryIds: string[]
+  socialLinks?: SocialLinkInput[]
 }) {
   try {
     if (!data.name?.trim()) {
@@ -137,10 +146,23 @@ export async function createCelebrity(data: {
         image: data.image?.trim() || null,
         categories: {
           connect: data.categoryIds.map(id => ({ id }))
-        }
+        },
+        // Social Media Links - nested create
+        ...(data.socialLinks && data.socialLinks.length > 0 && {
+          socialMediaLinks: {
+            create: data.socialLinks.map((link, index) => ({
+              platform: link.platform,
+              url: link.url.trim(),
+              displayOrder: link.displayOrder ?? index
+            }))
+          }
+        })
       },
       include: {
-        categories: true
+        categories: true,
+        socialMediaLinks: {
+          orderBy: { displayOrder: 'asc' }
+        }
       }
     })
 
@@ -165,6 +187,7 @@ export async function updateCelebrity(
     bio?: string
     image?: string
     categoryIds: string[]
+    socialLinks?: SocialLinkInput[]
   }
 ) {
   try {
@@ -209,26 +232,49 @@ export async function updateCelebrity(
       }
     }
 
-    const celebrity = await prisma.celebrity.update({
-      where: { id },
-      data: {
-        name: data.name.trim(),
-        slug,
-        nickname: data.nickname?.trim() || null,
-        profession: data.profession?.trim() || null,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        zodiac, // Hesaplanan burç değeri
-        birthPlace: data.birthPlace?.trim() || null,
-        nationality: data.nationality?.trim() || null,
-        bio: data.bio?.trim() || null,
-        image: data.image?.trim() || null,
-        categories: {
-          set: data.categoryIds.map(id => ({ id }))
+    // Social Media Links için deleteMany -> createMany stratejisi kullan
+    // Transaction ile atomik işlem garantisi
+    const celebrity = await prisma.$transaction(async (tx) => {
+      // Önce mevcut sosyal medya linklerini sil
+      await tx.socialMediaLink.deleteMany({
+        where: { celebrityId: id }
+      })
+
+      // Celebrity'yi güncelle ve yeni sosyal medya linklerini oluştur
+      return tx.celebrity.update({
+        where: { id },
+        data: {
+          name: data.name.trim(),
+          slug,
+          nickname: data.nickname?.trim() || null,
+          profession: data.profession?.trim() || null,
+          birthDate: data.birthDate ? new Date(data.birthDate) : null,
+          zodiac, // Hesaplanan burç değeri
+          birthPlace: data.birthPlace?.trim() || null,
+          nationality: data.nationality?.trim() || null,
+          bio: data.bio?.trim() || null,
+          image: data.image?.trim() || null,
+          categories: {
+            set: data.categoryIds.map(id => ({ id }))
+          },
+          // Yeni sosyal medya linklerini oluştur
+          ...(data.socialLinks && data.socialLinks.length > 0 && {
+            socialMediaLinks: {
+              create: data.socialLinks.map((link, index) => ({
+                platform: link.platform,
+                url: link.url.trim(),
+                displayOrder: link.displayOrder ?? index
+              }))
+            }
+          })
+        },
+        include: {
+          categories: true,
+          socialMediaLinks: {
+            orderBy: { displayOrder: 'asc' }
+          }
         }
-      },
-      include: {
-        categories: true
-      }
+      })
     })
 
     revalidatePath('/admin')

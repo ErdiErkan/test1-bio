@@ -159,8 +159,6 @@ src/
 
 ## 🚀 Canlı Ortama Alma (Deployment)
 
-Detaylı deployment yönergeleri için [DEPLOYMENT.md](https://www.google.com/search?q=./DEPLOYMENT.md) dosyasına göz atın.
-
 -----
 
 MIT Lisansı ile lisanslanmıştır.

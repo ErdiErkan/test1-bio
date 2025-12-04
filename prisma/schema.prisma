@@ -54,6 +54,7 @@ model Celebrity {
   birthDate   DateTime?
   birthPlace  String?  @db.VarChar(255)
   nationality String?  @db.VarChar(10)
+  zodiac      String?  @db.VarChar(20) // aries, taurus, vb
   bio         String?  @db.Text
   image       String?  @db.VarChar(1000)
   slug        String   @unique @db.VarChar(300)
@@ -67,6 +68,7 @@ model Celebrity {
   @@index([name])
   @@index([profession])
   @@index([nationality])
+  @@index([zodiac]) // Filtreleme performansı için index ekledik
   @@index([createdAt(sort: Desc)])
   @@index([slug])
 

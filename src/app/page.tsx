@@ -12,11 +12,20 @@ export const metadata: Metadata = {
   description: 'Favori ünlülerinizin hayat hikayelerini keşfedin. Detaylı biyografiler, kariyer bilgileri ve daha fazlası.',
 }
 
-async function getCelebrities(search?: string, categorySlug?: string) {
+// Arama parametreleri için tip tanımı
+interface SearchParamsProps {
+  search?: string
+  categorySlug?: string
+  nationality?: string
+  birthYear?: string
+  zodiac?: string
+}
+
+async function getCelebrities({ search, categorySlug, nationality, birthYear, zodiac }: SearchParamsProps) {
   try {
     const where: any = {}
 
-    // Arama query'si
+    // 1. Arama query'si
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -25,11 +34,35 @@ async function getCelebrities(search?: string, categorySlug?: string) {
       ]
     }
 
-    // Kategori filtresi
+    // 2. Kategori filtresi
     if (categorySlug) {
       where.categories = {
         some: {
           slug: categorySlug
+        }
+      }
+    }
+
+    // 3. Uyruk Filtresi
+    if (nationality) {
+      where.nationality = nationality
+    }
+
+    // 4. Burç Filtresi (Veritabanına 'zodiac' alanı eklendiyse)
+    if (zodiac) {
+      where.zodiac = zodiac
+    }
+
+    // 5. Doğum Yılı Filtresi
+    if (birthYear) {
+      const year = parseInt(birthYear)
+      if (!isNaN(year)) {
+        const startDate = new Date(`${year}-01-01`)
+        const endDate = new Date(`${year}-12-31`)
+        
+        where.birthDate = {
+          gte: startDate,
+          lte: endDate
         }
       }
     }
@@ -45,6 +78,7 @@ async function getCelebrities(search?: string, categorySlug?: string) {
         birthDate: true,
         image: true,
         slug: true,
+        // zodiac: true, // İsterseniz burç bilgisini de çekebilirsiniz
       }
     })
     return celebrities
@@ -84,10 +118,33 @@ function LoadingGrid() {
   )
 }
 
-async function CelebritiesWrapper({ search, category }: { search?: string; category?: string }) {
-  const celebrities = await getCelebrities(search, category)
+// Wrapper bileşeni: Parametreleri alır ve başlığı dinamik ayarlar
+async function CelebritiesWrapper({ 
+  search, 
+  category, 
+  nationality, 
+  birthYear,
+  zodiac 
+}: SearchParamsProps & { category?: string }) {
+  
+  const celebrities = await getCelebrities({ 
+    search, 
+    categorySlug: category, 
+    nationality, 
+    birthYear,
+    zodiac 
+  })
 
-  if ((search || category) && celebrities.length === 0) {
+  // Başlık mantığı
+  let title = "Son Eklenen Ünlüler"
+  
+  if (search) title = `"${search}" için sonuçlar`
+  else if (category) title = `Kategori: ${category}`
+  else if (nationality) title = `Uyruk: ${nationality}`
+  else if (birthYear) title = `Doğum Yılı: ${birthYear}`
+  else if (zodiac) title = `Burç: ${zodiac.charAt(0).toUpperCase() + zodiac.slice(1)}`
+
+  if (celebrities.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🔍</div>
@@ -95,9 +152,7 @@ async function CelebritiesWrapper({ search, category }: { search?: string; categ
           Sonuç Bulunamadı
         </h2>
         <p className="text-gray-500 mb-6">
-          {search && `"${search}" için `}
-          {category && `bu kategoride `}
-          herhangi bir ünlü bulunamadı.
+          Aradığınız kriterlere uygun ünlü bulunamadı.
         </p>
         <Link
           href="/"
@@ -109,23 +164,30 @@ async function CelebritiesWrapper({ search, category }: { search?: string; categ
     )
   }
 
-  const title = search
-    ? `"${search}" için ${celebrities.length} sonuç`
-    : category
-    ? `Kategori: ${category}`
-    : "Son Eklenen Ünlüler"
-
   return <CelebrityGrid celebrities={celebrities} title={title} />
 }
 
+// Sayfa Props Tanımı
 interface HomePageProps {
-  searchParams: Promise<{ q?: string; category?: string }>
+  searchParams: Promise<{ 
+    q?: string; 
+    category?: string;
+    nationality?: string;
+    birthYear?: string;
+    zodiac?: string;
+  }>
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams
+  
+  // URL parametrelerini alıyoruz
   const search = params?.q
   const category = params?.category
+  const nationality = params?.nationality
+  const birthYear = params?.birthYear
+  const zodiac = params?.zodiac
+
   const categories = await getCategories()
 
   return (
@@ -149,7 +211,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Suspense fallback={<LoadingGrid />}>
-          <CelebritiesWrapper search={search} category={category} />
+          <CelebritiesWrapper 
+            search={search} 
+            category={category} 
+            nationality={nationality}
+            birthYear={birthYear}
+            zodiac={zodiac}
+          />
         </Suspense>
       </section>
     </div>

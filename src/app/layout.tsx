@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/layout/Header'
@@ -7,6 +7,17 @@ import Footer from '@/components/layout/Footer'
 const inter = Inter({ subsets: ['latin'] })
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+
+// ✅ DOĞRU: Viewport ve ThemeColor burada tanımlı
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#2563eb' },
+    { media: '(prefers-color-scheme: dark)', color: '#1e40af' },
+  ],
+}
 
 export const metadata: Metadata = {
   title: {
@@ -48,10 +59,10 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   robots: {
-    index: true,
+    index: false, // Google indexlemesini engellemek için devre dışı bırakıldı
     follow: true,
     googleBot: {
-      index: true,
+      index: false, // Google indexlemesini engellemek için devre dışı bırakıldı
       follow: true,
       'max-video-preview': -1,
       'max-image-preview': 'large',
@@ -69,15 +80,7 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/manifest.json',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-  },
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#2563eb' },
-    { media: '(prefers-color-scheme: dark)', color: '#1e40af' },
-  ],
+  // ❌ BURADAN viewport ve themeColor ALANLARI SİLİNDİ (Çünkü yukarıya taşıdık)
 }
 
 export default function RootLayout({

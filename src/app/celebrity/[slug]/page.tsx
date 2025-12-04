@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation'
 import CelebrityProfile from '@/components/celebrity/CelebrityProfile'
 import { prisma } from '@/lib/db'
-import { getCelebrityDescription, getCountryInfo } from '@/lib/celebrity'
+import { getCelebrityDescription } from '@/lib/celebrity'
+import { generatePersonSchema } from '@/lib/seo' // YENİ: SEO yardımcı fonksiyonu import edildi
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -35,20 +37,22 @@ export async function generateMetadata({ params }: PageProps) {
     }
   }
 
+  // Meta description için dinamik açıklama (max 160 karakter)
   const description = getCelebrityDescription(celebrity, 160)
 
   return {
-    title: `${celebrity.name} - CelebHub`,
+    title: `${celebrity.name} Biyografisi, Hayatı ve Kariyeri - CelebHub`, // Başlık biraz daha zenginleştirildi
     description: description,
     openGraph: {
-      title: celebrity.name,
+      title: `${celebrity.name} Kimdir? - Biyografisi ve Hayatı`,
       description: description,
       images: celebrity.image ? [celebrity.image] : [],
       type: 'profile',
+      url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'}/celebrity/${celebrity.slug}`,
     },
     twitter: {
       card: 'summary_large_image',
-      title: celebrity.name,
+      title: `${celebrity.name} - CelebHub`,
       description: description,
       images: celebrity.image ? [celebrity.image] : [],
     },
@@ -64,32 +68,13 @@ export default async function CelebrityPage({ params }: PageProps) {
     notFound()
   }
 
-  const country = getCountryInfo(celebrity.nationality)
-
-  // Structured Data (JSON-LD) - Schema.org Person
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@type': 'Person',
-    name: celebrity.name,
-    ...(celebrity.nickname && { alternateName: celebrity.nickname }),
-    ...(celebrity.profession && { jobTitle: celebrity.profession }),
-    ...(celebrity.birthDate && {
-      birthDate: new Date(celebrity.birthDate).toISOString().split('T')[0]
-    }),
-    ...(celebrity.birthPlace && { birthPlace: celebrity.birthPlace }),
-    ...(country && { nationality: country.name }),
-    ...(celebrity.image && {
-      image: celebrity.image.startsWith('http')
-        ? celebrity.image
-        : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'}${celebrity.image}`
-    }),
-    ...(celebrity.bio && { description: celebrity.bio.substring(0, 500) }),
-    url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'}/celebrity/${celebrity.slug}`,
-  }
+  // YENİ: Merkezi SEO fonksiyonundan şemayı alıyoruz.
+  // getCountryInfo veya manuel JSON oluşturma işlemlerine artık gerek yok.
+  const structuredData = generatePersonSchema(celebrity)
 
   return (
     <>
-      {/* Structured Data */}
+      {/* Structured Data (JSON-LD) */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}

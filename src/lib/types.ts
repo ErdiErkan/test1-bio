@@ -18,6 +18,7 @@ export interface Celebrity {
   bio?: string | null
   image?: string | null
   slug: string
+  zodiac?: string | null
   createdAt: Date
   updatedAt: Date
   categories?: Category[]

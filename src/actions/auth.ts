@@ -1,28 +1,39 @@
+// src/actions/auth.ts
 'use server'
 
 import { signIn } from "@/lib/auth"
 import { AuthError } from "next-auth"
 
-export async function loginAction(prevState: string | undefined, formData: FormData) {
+export async function loginAction(prevState: any, formData: FormData) {
   try {
-    // NextAuth'un kendi signIn fonksiyonunu çağırıyoruz.
-    // Bu fonksiyon başarılı olursa otomatik olarak yönlendirme yapar (redirect).
+    // redirect: false server-side'da tam desteklenmese de hata fırlatmasını önlemeye çalışırız
+    // Başarılı olursa kod aşağıya devam eder.
     await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
-      redirectTo: "/admin", // Başarılı olursa buraya git
+      redirect: false, 
     })
+    
+    // Hata fırlatılmazsa başarı dönüyoruz
+    return { success: true, message: "Giriş başarılı, yönlendiriliyor..." }
+
   } catch (error) {
-    // NextAuth redirect işlemi için aslında bir hata fırlatır,
-    // bu yüzden AuthError dışındaki hataları tekrar fırlatmalıyız.
+    // NextAuth/Next.js başarılı redirect'i bir hata olarak fırlatabilir (NEXT_REDIRECT)
+    // Bu durumda hatayı yutup başarı dönmemiz gerekir.
+    if (`${error}`.includes('NEXT_REDIRECT')) {
+      return { success: true, message: "Giriş başarılı, yönlendiriliyor..." }
+    }
+
     if (error instanceof AuthError) {
       switch (error.type) {
         case "CredentialsSignin":
-          return "Email veya şifre hatalı."
+          return { message: "Email veya şifre hatalı.", error: true }
         default:
-          return "Giriş yapılamadı, lütfen tekrar deneyin."
+          return { message: "Giriş yapılamadı, lütfen tekrar deneyin.", error: true }
       }
     }
+    
+    // Beklenmedik hataları fırlat
     throw error
   }
 }

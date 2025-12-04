@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { calculateZodiac } from '@/lib/celebrity'
 
 // Slug oluşturma fonksiyonu
 function createSlug(text: string): string {
@@ -97,6 +98,13 @@ export async function createCelebrity(data: {
       return { success: false, error: 'İsim alanı zorunludur' }
     }
 
+    // YENİ: Zodiac (Burç) Hesaplama
+    let zodiac = null
+    if (data.birthDate) {
+      const zInfo = calculateZodiac(data.birthDate)
+      if (zInfo) zodiac = zInfo.sign // 'aries', 'taurus' vb. döner
+    }
+
     // Slug oluştur
     let slug = createSlug(data.name)
     let slugSuffix = 0
@@ -122,6 +130,7 @@ export async function createCelebrity(data: {
         nickname: data.nickname?.trim() || null,
         profession: data.profession?.trim() || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
+        zodiac, // Hesaplanan burç değeri
         birthPlace: data.birthPlace?.trim() || null,
         nationality: data.nationality?.trim() || null,
         bio: data.bio?.trim() || null,
@@ -163,6 +172,13 @@ export async function updateCelebrity(
       return { success: false, error: 'İsim alanı zorunludur' }
     }
 
+    // YENİ: Zodiac (Burç) Hesaplama
+    let zodiac = null
+    if (data.birthDate) {
+      const zInfo = calculateZodiac(data.birthDate)
+      if (zInfo) zodiac = zInfo.sign
+    }
+
     // Mevcut ünlüyü al
     const existing = await prisma.celebrity.findUnique({
       where: { id },
@@ -201,6 +217,7 @@ export async function updateCelebrity(
         nickname: data.nickname?.trim() || null,
         profession: data.profession?.trim() || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
+        zodiac, // Hesaplanan burç değeri
         birthPlace: data.birthPlace?.trim() || null,
         nationality: data.nationality?.trim() || null,
         bio: data.bio?.trim() || null,

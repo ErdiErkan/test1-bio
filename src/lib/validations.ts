@@ -74,11 +74,24 @@ export function validateCelebrityForm(data: CelebrityFormData): ValidationError[
     })
   }
 
-  // Resim URL kontrolü
+  // Resim URL kontrolü - DÜZELTİLEN KISIM
   if (data.image && data.image.trim()) {
+    const imagePath = data.image.trim()
+    
+    // 1. Data URL (Base64) kontrolü (yeni yüklemeler için)
+    const isDataUrl = imagePath.startsWith('data:')
+    // 2. Relative path kontrolü (yerel dosyalar için)
+    const isRelativePath = imagePath.startsWith('/')
+    // 3. Absolute URL kontrolü (dış linkler için)
+    let isAbsoluteUrl = false
     try {
-      new URL(data.image.trim())
+      new URL(imagePath)
+      isAbsoluteUrl = true
     } catch {
+      isAbsoluteUrl = false
+    }
+
+    if (!isDataUrl && !isRelativePath && !isAbsoluteUrl) {
       errors.push({
         field: 'image',
         message: 'Geçerli bir resim URL\'i girin'

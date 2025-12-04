@@ -7,10 +7,9 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: '**', // Tüm dış kaynaklara (Wikimedia, vb.) izin ver
       },
     ],
-    // formats ve sizes dizileri unoptimized: true iken yok sayılır, kalabilirler.
     formats: ['image/avif', 'image/webp'],
   },
 
@@ -47,8 +46,10 @@ const nextConfig = {
             value: '1; mode=block',
           },
           {
+            // DÜZELTME: 'origin-when-cross-origin' yerine 'no-referrer-when-downgrade' kullanıldı.
+            // Bu, Wikimedia gibi hassas CDN'lerin görseli bloklamasını engeller.
             key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
+            value: 'no-referrer-when-downgrade',
           },
           {
             key: 'Permissions-Policy',

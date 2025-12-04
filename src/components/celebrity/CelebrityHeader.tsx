@@ -15,7 +15,7 @@ interface Celebrity {
   nationality?: string | null
   image?: string | null
   slug: string
-  updatedAt?: Date | string // EKLENDİ: Cache kontrolü için gerekli
+  updatedAt?: Date | string
 }
 
 interface CelebrityHeaderProps {
@@ -54,25 +54,30 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
 
   const birthDate = celebrity.birthDate ? new Date(celebrity.birthDate) : null
   const birthYear = birthDate?.getFullYear()
-  const birthDay = birthDate ? `${birthDate.getDate()}-${birthDate.getMonth() + 1}` : null
-
-  // DÜZELTME: Sabit bir versiyon numarası oluşturuyoruz
-  // Eğer updatedAt varsa onu kullan, yoksa sabit '1' kullan. 
-  // Bu sayede sunucu ve client aynı değeri üretir.
+  
+  // Cache busting için versiyon numarası (updatedAt varsa o, yoksa '1')
   const imageVersion = celebrity.updatedAt 
     ? new Date(celebrity.updatedAt).getTime() 
     : '1'
 
+  // ✅ KRİTİK EKLENTİ: Resim URL Güvenlik Kontrolü
+  // Dış kaynaklı (http/https) resimlerde ?v= parametresi hataya sebep olabilir.
+  // Bu fonksiyon sadece yerel (kendi sunucumuzdaki) resimlere versiyon ekler.
+  const getSafeImageUrl = (url: string | null | undefined) => {
+    if (!url) return ''
+    if (url.startsWith('http')) return url
+    return `${url}?v=${imageVersion}`
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       <div className="md:flex">
-        {/* Fotoğraf */}
+        {/* Fotoğraf Alanı */}
         <div className="md:w-1/3">
           <div className="aspect-[3/4] relative bg-gray-100 flex items-center justify-center overflow-hidden">
             {celebrity.image && !imageError ? (
               <img
-                // DÜZELTME: new Date().getTime() yerine imageVersion kullanıldı
-                src={`${celebrity.image}?v=${imageVersion}`}
+                src={getSafeImageUrl(celebrity.image)}
                 alt={celebrity.name}
                 className="w-full h-full object-cover"
                 onError={() => setImageError(true)}
@@ -87,7 +92,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
           </div>
         </div>
 
-        {/* Bilgiler */}
+        {/* Bilgiler Alanı */}
         <div className="md:w-2/3 p-8">
           <div className="mb-6">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -100,17 +105,20 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
             )}
           </div>
 
-          {/* Kısa Bilgiler */}
+          {/* Detaylar Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {celebrity.birthDate && (
               <div className="flex items-start space-x-3">
                 <div className="text-2xl">📅</div>
                 <div>
                   <div className="font-medium text-gray-700">Doğum Tarihi</div>
-                  <div className="text-gray-900">
+                  
+                  {/* ✅ KRİTİK EKLENTİ: suppressHydrationWarning */}
+                  {/* Sunucu ve İstemci arasındaki tarih formatı farkını (Ocak vs January) görmezden gelir */}
+                  <div className="text-gray-900" suppressHydrationWarning={true}>
                     {birthYear && (
                       <Link
-                        href={`/search?birthYear=${birthYear}`}
+                        href={`/?birthYear=${birthYear}`}
                         className="hover:text-blue-600 hover:underline transition-colors"
                       >
                         {formatDate(celebrity.birthDate)}
@@ -118,6 +126,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
                     )}
                     {!birthYear && formatDate(celebrity.birthDate)}
                   </div>
+
                   {age && (
                     <div className="text-sm text-gray-500">{age} yaşında</div>
                   )}
@@ -142,7 +151,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
                   <div className="font-medium text-gray-700">Burç</div>
                   <div className="text-gray-900">
                     <Link
-                      href={`/search?zodiac=${zodiac.sign}`}
+                      href={`/?zodiac=${zodiac.sign}`}
                       className="hover:text-blue-600 hover:underline transition-colors"
                     >
                       {zodiac.nameTR}
@@ -160,7 +169,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
                   <div className="font-medium text-gray-700">Uyruk</div>
                   <div className="text-gray-900">
                     <Link
-                      href={`/search?nationality=${country.code}`}
+                      href={`/?nationality=${country.code}`}
                       className="hover:text-blue-600 hover:underline transition-colors"
                     >
                       {country.name}

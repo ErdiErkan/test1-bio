@@ -30,22 +30,28 @@ export default async function CategoriesPage() {
         </div>
 
         {/* Navigation */}
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <Link
             href="/admin"
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
             Ünlüler
           </Link>
           <Link
             href="/admin/categories"
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
             Kategoriler
           </Link>
           <Link
+            href="/admin/reports"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
+          >
+            Geri Bildirimler
+          </Link>
+          <Link
             href="/"
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
             Ana Sayfa
           </Link>

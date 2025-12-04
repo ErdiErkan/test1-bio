@@ -99,3 +99,47 @@ export interface SearchParams {
   page?: number
   limit?: number
 }
+
+// Report Status type - mirrors Prisma enum
+export type ReportStatus = 'PENDING' | 'IN_REVIEW' | 'RESOLVED' | 'REJECTED'
+
+// Report Type type - mirrors Prisma enum
+export type ReportType = 'WRONG_INFO' | 'TYPO' | 'IMAGE_ISSUE' | 'OTHER'
+
+// Report type
+export interface Report {
+  id: string
+  celebrityId: string
+  celebrity?: Celebrity
+  type: ReportType
+  message: string
+  contactEmail?: string | null
+  status: ReportStatus
+  ipAddress?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Report form input type
+export interface ReportFormData {
+  celebrityId: string
+  type: ReportType
+  message: string
+  contactEmail?: string
+}
+
+// Report with celebrity name for admin panel
+export interface ReportWithCelebrity extends Omit<Report, 'celebrity'> {
+  celebrity: {
+    id: string
+    name: string
+    slug: string
+  }
+}
+
+// Action response type
+export interface ActionResponse {
+  success: boolean
+  message: string
+  data?: unknown
+}

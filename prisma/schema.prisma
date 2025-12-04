@@ -25,6 +25,21 @@ model User {
 }
 
 // ============================================
+// Social Platform Enum
+// ============================================
+enum SocialPlatform {
+  INSTAGRAM
+  TWITTER
+  YOUTUBE
+  TIKTOK
+  FACEBOOK
+  LINKEDIN
+  WEBSITE
+  IMDB
+  SPOTIFY
+}
+
+// ============================================
 // Category Model - Flexible categorization
 // ============================================
 model Category {
@@ -62,7 +77,10 @@ model Celebrity {
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   // Many-to-Many relationship (Implicit)
-  categories  Category[]
+  categories       Category[]
+
+  // One-to-Many relationship with Social Media Links
+  socialMediaLinks SocialMediaLink[]
 
   // Performance indexes
   @@index([name])
@@ -73,4 +91,24 @@ model Celebrity {
   @@index([slug])
 
   @@map("celebrities")
+}
+
+// ============================================
+// Social Media Link Model
+// ============================================
+model SocialMediaLink {
+  id           String         @id @default(cuid())
+  platform     SocialPlatform
+  url          String         @db.VarChar(500)
+  displayOrder Int            @default(0)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+
+  // Relation to Celebrity
+  celebrityId  String
+  celebrity    Celebrity      @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  @@index([celebrityId])
+  @@index([platform])
+  @@map("social_media_links")
 }

@@ -8,13 +8,45 @@ export interface Category {
   updatedAt: Date
 }
 
+// Social Platform type - mirrors Prisma enum
+export type SocialPlatform =
+  | 'INSTAGRAM'
+  | 'TWITTER'
+  | 'YOUTUBE'
+  | 'TIKTOK'
+  | 'FACEBOOK'
+  | 'LINKEDIN'
+  | 'WEBSITE'
+  | 'IMDB'
+  | 'SPOTIFY'
+
+// Social Media Link type
+export interface SocialMediaLink {
+  id: string
+  platform: SocialPlatform
+  url: string
+  displayOrder: number
+  celebrityId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Social Media Link Input for form submissions
+export interface SocialMediaLinkInput {
+  platform: SocialPlatform
+  url: string
+  displayOrder?: number
+}
+
 // Core Celebrity type from Prisma
 export interface Celebrity {
   id: string
   name: string
+  nickname?: string | null
   profession?: string | null
   birthDate?: Date | null
   birthPlace?: string | null
+  nationality?: string | null
   bio?: string | null
   image?: string | null
   slug: string
@@ -22,17 +54,21 @@ export interface Celebrity {
   createdAt: Date
   updatedAt: Date
   categories?: Category[]
+  socialMediaLinks?: SocialMediaLink[]
 }
 
 // Form data type for create/update operations
 export interface CelebrityFormData {
   name: string
+  nickname?: string
   profession?: string
   birthDate?: string
   birthPlace?: string
+  nationality?: string
   bio?: string
   image?: string
   categoryIds?: string[]
+  socialLinks?: SocialMediaLinkInput[]
 }
 
 // API Response types for better type safety

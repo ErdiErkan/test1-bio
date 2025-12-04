@@ -16,7 +16,13 @@ interface PageProps {
 async function getCelebrity(slug: string) {
   try {
     const celebrity = await prisma.celebrity.findUnique({
-      where: { slug }
+      where: { slug },
+      include: {
+        categories: true,
+        socialMediaLinks: {
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
     })
     return celebrity
   } catch (error) {

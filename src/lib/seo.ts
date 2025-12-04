@@ -1,7 +1,12 @@
-import { Celebrity } from '@/lib/types'
+import { Celebrity, SocialMediaLink } from '@/lib/types'
 import { getCountryInfo } from '@/lib/celebrity'
 
-export function generatePersonSchema(celebrity: Celebrity) {
+// Celebrity with optional socialMediaLinks for SEO
+interface CelebrityWithSocialLinks extends Celebrity {
+  socialMediaLinks?: SocialMediaLink[]
+}
+
+export function generatePersonSchema(celebrity: CelebrityWithSocialLinks) {
   // Site URL'ini güvenli bir şekilde alalım
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'
   
@@ -51,6 +56,11 @@ export function generatePersonSchema(celebrity: Celebrity) {
     // ARTIK TYPESCRIPT HATASI VERMEZ:
     ...(celebrity.zodiac && {
         disambiguatingDescription: `Zodiac Sign: ${celebrity.zodiac.charAt(0).toUpperCase() + celebrity.zodiac.slice(1)}`
+    }),
+
+    // Social Media Links için sameAs array - Google Knowledge Graph için kritik
+    ...(celebrity.socialMediaLinks && celebrity.socialMediaLinks.length > 0 && {
+      sameAs: celebrity.socialMediaLinks.map(link => link.url)
     })
   }
 

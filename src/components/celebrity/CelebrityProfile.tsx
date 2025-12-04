@@ -1,6 +1,7 @@
 import CelebrityHeader from './CelebrityHeader'
 import CelebrityInfo from './CelebrityInfo'
 import BackButton from '../ui/BackButton'
+import { ReportButton } from '../report'
 
 interface Celebrity {
   id: string
@@ -34,6 +35,11 @@ export default function CelebrityProfile({ celebrity }: CelebrityProfileProps) {
         <div className="space-y-8">
           <CelebrityHeader celebrity={celebrity} />
           <CelebrityInfo celebrity={celebrity} />
+
+          {/* Hata Bildir Butonu */}
+          <div className="flex justify-center pt-4 border-t border-gray-200">
+            <ReportButton celebrityId={celebrity.id} celebrityName={celebrity.name} />
+          </div>
         </div>
       </div>
     </div>

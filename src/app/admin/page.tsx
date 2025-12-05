@@ -112,11 +112,14 @@ function AdminPageContent() {
       if (page) params.set('page', page)
       params.set('limit', '50')
 
-      const response = await fetch(`/api/celebrities/admin?${params.toString()}`, {
+      // ✅ GÜNCELLEME: URL sonuna t=${Date.now()} ekleyerek cache'i kırıyoruz
+      const cacheBuster = `&t=${Date.now()}`
+
+      const response = await fetch(`/api/celebrities/admin?${params.toString()}${cacheBuster}`, {
         cache: 'no-store',
         headers: {
           'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate' // Header'ı güçlendiriyoruz
         }
       })
 

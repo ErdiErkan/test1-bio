@@ -11,14 +11,14 @@ import { getCategories } from '@/actions/categories'
 import { getAllCountries } from '@/lib/celebrity'
 import type { SocialPlatform, CelebrityImage, FAQ } from '@/lib/types'
 
-// Social Link form state type
+// --- TİP TANIMLARI ---
+
 interface SocialLinkFormItem {
   id: string
   platform: SocialPlatform | ''
   url: string
 }
 
-// Image form state type
 interface ImageFormItem {
   id: string
   url: string
@@ -29,35 +29,11 @@ interface ImageFormItem {
   error: boolean
 }
 
-// FAQ form state type
 interface FAQFormItem {
   id: string
   question: string
   answer: string
 }
-
-// Platform configuration
-const SOCIAL_PLATFORMS: {
-  value: SocialPlatform
-  label: string
-  placeholder: string
-  icon: string
-}[] = [
-  { value: 'INSTAGRAM', label: 'Instagram', placeholder: 'https://instagram.com/kullaniciadi', icon: '📷' },
-  { value: 'TWITTER', label: 'Twitter / X', placeholder: 'https://twitter.com/kullaniciadi', icon: '𝕏' },
-  { value: 'YOUTUBE', label: 'YouTube', placeholder: 'https://youtube.com/@kanal', icon: '▶️' },
-  { value: 'TIKTOK', label: 'TikTok', placeholder: 'https://tiktok.com/@kullaniciadi', icon: '🎵' },
-  { value: 'FACEBOOK', label: 'Facebook', placeholder: 'https://facebook.com/sayfa', icon: '👤' },
-  { value: 'LINKEDIN', label: 'LinkedIn', placeholder: 'https://linkedin.com/in/kullaniciadi', icon: '💼' },
-  { value: 'WEBSITE', label: 'Website', placeholder: 'https://www.ornek.com', icon: '🌐' },
-  { value: 'IMDB', label: 'IMDb', placeholder: 'https://imdb.com/name/nm123456', icon: '🎬' },
-  { value: 'SPOTIFY', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/...', icon: '🎧' },
-]
-
-const MAX_IMAGES = 3
-
-// Unique ID generator
-const generateId = () => Math.random().toString(36).substring(2, 9)
 
 interface SocialMediaLink {
   id: string
@@ -93,6 +69,46 @@ interface Category {
   slug: string
 }
 
+// --- KONFİGÜRASYON ---
+
+const SOCIAL_PLATFORMS: {
+  value: SocialPlatform
+  label: string
+  placeholder: string
+  icon: string
+}[] = [
+  { value: 'INSTAGRAM', label: 'Instagram', placeholder: 'https://instagram.com/kullaniciadi', icon: '📷' },
+  { value: 'TWITTER', label: 'Twitter / X', placeholder: 'https://twitter.com/kullaniciadi', icon: '𝕏' },
+  { value: 'YOUTUBE', label: 'YouTube', placeholder: 'https://youtube.com/@kanal', icon: '▶️' },
+  { value: 'TIKTOK', label: 'TikTok', placeholder: 'https://tiktok.com/@kullaniciadi', icon: '🎵' },
+  { value: 'FACEBOOK', label: 'Facebook', placeholder: 'https://facebook.com/sayfa', icon: '👤' },
+  { value: 'LINKEDIN', label: 'LinkedIn', placeholder: 'https://linkedin.com/in/kullaniciadi', icon: '💼' },
+  { value: 'WEBSITE', label: 'Website', placeholder: 'https://www.ornek.com', icon: '🌐' },
+  { value: 'IMDB', label: 'IMDb', placeholder: 'https://imdb.com/name/nm123456', icon: '🎬' },
+  { value: 'SPOTIFY', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/...', icon: '🎧' },
+]
+
+const MAX_IMAGES = 3
+
+// --- HELPER FONKSİYONLAR ---
+
+const generateId = () => Math.random().toString(36).substring(2, 9)
+
+/**
+ * URL'i güvenli hale getirir ve API rotasına yönlendirir.
+ * http ile başlıyorsa dokunmaz, aksi halde /uploads/ rotasına hazırlar.
+ */
+const getSafeUrl = (url: string | null | undefined): string => {
+  if (!url) return ''
+  if (url.startsWith('http') || url.startsWith('data:')) return url
+  
+  // URL başındaki slash'i temizle ve tekrar ekle (garanti olsun)
+  const cleanPath = url.startsWith('/') ? url : `/${url}`
+  return cleanPath
+}
+
+// --- COMPONENT ---
+
 export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFormProps) {
   const router = useRouter()
   const { addToast } = useToast()
@@ -120,36 +136,27 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     return []
   })
 
-  // Multi-image state
+  // Multi-image state initialization
   const [images, setImages] = useState<ImageFormItem[]>(() => {
-    // Initialize from existing images
+    // 1. Yeni sistemdeki resimleri kontrol et
     if (celebrity?.images && celebrity.images.length > 0) {
       return celebrity.images.map((img, index) => {
-        // ✅ 1. DÜZELTME: URL Sanitization (Başına slash ekleme)
-        let safeUrl = img.url;
-        if (safeUrl && !safeUrl.startsWith('http') && !safeUrl.startsWith('data:') && !safeUrl.startsWith('/')) {
-          safeUrl = `/${safeUrl}`;
-        }
-
+        const safeUrl = getSafeUrl(img.url)
         return {
           id: generateId(),
           url: safeUrl,
           file: null,
-          preview: safeUrl, // Preview için de güvenli URL kullan
+          preview: safeUrl,
           isMain: img.isMain || index === 0,
           isUploading: false,
           error: false
         }
       })
     }
-    // Fallback to legacy image field
+    
+    // 2. Eski sistemdeki tekil resmi kontrol et
     if (celebrity?.image) {
-      // ✅ Legacy image için de aynı kontrol
-      let safeUrl = celebrity.image;
-      if (safeUrl && !safeUrl.startsWith('http') && !safeUrl.startsWith('data:') && !safeUrl.startsWith('/')) {
-        safeUrl = `/${safeUrl}`;
-      }
-
+      const safeUrl = getSafeUrl(celebrity.image)
       return [{
         id: generateId(),
         url: safeUrl,
@@ -220,19 +227,16 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
       return
     }
 
-    // File type validation
     if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
       addToast('Sadece JPG, PNG ve WEBP formatları desteklenir', 'error')
       return
     }
 
-    // File size validation (5MB)
     if (file.size > 5 * 1024 * 1024) {
       addToast('Dosya boyutu maksimum 5MB olabilir', 'error')
       return
     }
 
-    // Create preview
     const reader = new FileReader()
     reader.onloadend = () => {
       const newImage: ImageFormItem = {
@@ -240,22 +244,19 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         url: '',
         file,
         preview: reader.result as string,
-        isMain: images.length === 0, // First image is main
+        isMain: images.length === 0,
         isUploading: false,
         error: false
       }
       setImages(prev => [...prev, newImage])
     }
     reader.readAsDataURL(file)
-
-    // Reset input
     e.target.value = ''
   }, [images.length, addToast])
 
   const handleRemoveImage = useCallback((imageId: string) => {
     setImages(prev => {
       const filtered = prev.filter(img => img.id !== imageId)
-      // If we removed the main image, make the first one main
       if (filtered.length > 0 && !filtered.some(img => img.isMain)) {
         filtered[0].isMain = true
       }
@@ -375,7 +376,6 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     let isValid = true
 
     faqs.forEach(faq => {
-      // Only validate if at least one field is filled
       if (faq.question.trim() || faq.answer.trim()) {
         if (!faq.question.trim()) {
           newErrors[`${faq.id}-question`] = 'Soru boş bırakılamaz'
@@ -397,7 +397,6 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Get first image for validation
     const mainImageUrl = images.length > 0 ? (images[0].url || images[0].preview) : ''
 
     const validationErrors = validateCelebrityForm({
@@ -422,17 +421,15 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     setIsSubmitting(true)
 
     try {
-      // Upload new images
+      // 1. Yeni resimleri yükle
       const uploadedImages: { url: string; isMain: boolean; displayOrder: number }[] = []
 
       for (let i = 0; i < images.length; i++) {
         const img = images[i]
 
         if (img.file) {
-          // New file needs upload
-          setImages(prev =>
-            prev.map(x => (x.id === img.id ? { ...x, isUploading: true } : x))
-          )
+          // Dosya varsa yükle
+          setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: true } : x)))
 
           const uploadFormData = new FormData()
           uploadFormData.append('file', img.file)
@@ -440,32 +437,30 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           const uploadResult = await uploadImage(uploadFormData)
 
           if (!uploadResult.success) {
-            setImages(prev =>
-              prev.map(x => (x.id === img.id ? { ...x, isUploading: false, error: true } : x))
-            )
+            setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: false, error: true } : x)))
             throw new Error(uploadResult.error || 'Resim yüklenemedi')
           }
 
+          const finalPath = getSafeUrl(uploadResult.imagePath)
+
           uploadedImages.push({
-            url: uploadResult.imagePath || '',
+            url: finalPath,
             isMain: img.isMain,
             displayOrder: i
           })
 
-          setImages(prev =>
-            prev.map(x => (x.id === img.id ? { ...x, isUploading: false, url: uploadResult.imagePath || '' } : x))
-          )
+          setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: false, url: finalPath } : x)))
         } else if (img.url) {
-          // Existing image
+          // Var olan resim
           uploadedImages.push({
-            url: img.url,
+            url: getSafeUrl(img.url),
             isMain: img.isMain,
             displayOrder: i
           })
         }
       }
 
-      // Prepare social links
+      // 2. Sosyal medya verilerini hazırla
       const validSocialLinks = socialLinks
         .filter(link => link.platform && link.url.trim())
         .map((link, index) => ({
@@ -474,7 +469,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           displayOrder: index
         }))
 
-      // Prepare FAQs (filter out empty ones)
+      // 3. FAQ verilerini hazırla
       const validFaqs = faqs
         .filter(faq => faq.question.trim() && faq.answer.trim())
         .map((faq, index) => ({
@@ -483,6 +478,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           displayOrder: index
         }))
 
+      // 4. Veriyi birleştir
       const celebrityData = {
         name: formData.name,
         nickname: formData.nickname,
@@ -498,6 +494,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         faqs: validFaqs
       }
 
+      // 5. Sunucuya gönder
       let result
       if (isEdit && celebrity) {
         result = await updateCelebrity(celebrity.id, celebrityData)
@@ -514,8 +511,14 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
         'success'
       )
 
-      router.push('/admin')
+      // 6. Yönlendirme (Router Cache'i temizleyerek)
       router.refresh()
+      
+      // Race condition önlemek için kısa gecikme
+      setTimeout(() => {
+        router.push('/admin')
+      }, 150)
+      
     } catch (error) {
       console.error('Form submission error:', error)
       addToast(error instanceof Error ? error.message : 'Bir hata oluştu', 'error')
@@ -701,20 +704,28 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
                   img.isMain ? 'border-blue-500' : 'border-gray-200'
                 } ${img.error ? 'border-red-500' : ''}`}
               >
-                {/* Image Preview - ✅ 2. DÜZELTME: next/image Kullanımı */}
-                <Image
-                  src={img.preview}
-                  alt={`Fotoğraf ${index + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  unoptimized // ✅ 3. DÜZELTME: Local upload ve Docker volume uyumu için
-                  onError={() => {
-                    setImages(prev =>
-                      prev.map(x => (x.id === img.id ? { ...x, error: true } : x))
-                    )
-                  }}
-                />
+                {/* Image Preview & Display */}
+                {img.error ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400">
+                    <span className="text-4xl mb-2">📷</span>
+                    <span className="text-xs text-center px-2">Yüklenemedi</span>
+                  </div>
+                ) : (
+                  <Image
+                    src={img.preview}
+                    alt={`Fotoğraf ${index + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    unoptimized={true} // ✅ Titremeyi ve sunucu yükünü engeller
+                    onError={() => {
+                      // Sonsuz döngüyü engelle: Sadece hata yoksa state güncelle
+                      setImages(prev =>
+                        prev.map(x => (x.id === img.id && !x.error ? { ...x, error: true } : x))
+                      )
+                    }}
+                  />
+                )}
 
                 {/* Loading Overlay */}
                 {img.isUploading && (
@@ -725,7 +736,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
 
                 {/* Main Badge */}
                 {img.isMain && (
-                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded z-10">
+                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded z-10 shadow-sm">
                     Ana Resim
                   </div>
                 )}

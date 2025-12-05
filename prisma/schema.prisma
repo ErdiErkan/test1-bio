@@ -91,13 +91,19 @@ model Celebrity {
   nationality String?  @db.VarChar(10)
   zodiac      String?  @db.VarChar(20) // aries, taurus, vb
   bio         String?  @db.Text
-  image       String?  @db.VarChar(1000)
+  image       String?  @db.VarChar(1000) // @deprecated - Use images relation instead. Kept for backward compatibility.
   slug        String   @unique @db.VarChar(300)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   // Many-to-Many relationship (Implicit)
   categories       Category[]
+
+  // One-to-Many relationship with Celebrity Images (max 3)
+  images CelebrityImage[]
+
+  // One-to-Many relationship with FAQs
+  faqs FAQ[]
 
   // One-to-Many relationship with Social Media Links
   socialMediaLinks SocialMediaLink[]
@@ -114,6 +120,47 @@ model Celebrity {
   @@index([slug])
 
   @@map("celebrities")
+}
+
+// ============================================
+// Celebrity Image Model - Multi-image support (max 3)
+// ============================================
+model CelebrityImage {
+  id           String   @id @default(cuid())
+  url          String   @db.VarChar(1000)
+  isMain       Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  // Relation to Celebrity
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  @@index([celebrityId])
+  @@index([isMain])
+  @@index([displayOrder])
+  @@map("celebrity_images")
+}
+
+// ============================================
+// FAQ Model - Frequently Asked Questions for SEO
+// ============================================
+model FAQ {
+  id           String   @id @default(cuid())
+  question     String   @db.VarChar(500)
+  answer       String   @db.Text
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  // Relation to Celebrity
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  @@index([celebrityId])
+  @@index([displayOrder])
+  @@map("faqs")
 }
 
 // ============================================

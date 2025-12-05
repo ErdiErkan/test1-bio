@@ -3,12 +3,26 @@
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { calculateZodiac } from '@/lib/celebrity'
-import type { SocialPlatform } from '@/lib/types'
+import type { SocialPlatform, DataQualityFilter } from '@/lib/types'
 
 // Social Link Input type for server actions
 interface SocialLinkInput {
   platform: SocialPlatform
   url: string
+  displayOrder?: number
+}
+
+// Image Input type for server actions
+interface ImageInput {
+  url: string
+  isMain?: boolean
+  displayOrder?: number
+}
+
+// FAQ Input type for server actions
+interface FAQInput {
+  question: string
+  answer: string
   displayOrder?: number
 }
 
@@ -48,7 +62,7 @@ export async function searchCelebrities({
   limit = 10
 }: SearchCelebritiesParams) {
   try {
-    const where: any = {}
+    const where: Record<string, unknown> = {}
 
     // Arama query'si
     if (query) {
@@ -79,6 +93,9 @@ export async function searchCelebrities({
             name: true,
             slug: true,
           }
+        },
+        images: {
+          orderBy: { displayOrder: 'asc' }
         }
       }
     })
@@ -86,6 +103,136 @@ export async function searchCelebrities({
     return { success: true, data: celebrities }
   } catch (error) {
     console.error('Search celebrities error:', error)
+    return { success: false, error: 'Arama yapılamadı' }
+  }
+}
+
+// Admin search with advanced filters
+interface AdminSearchParams {
+  query?: string
+  categorySlug?: string
+  nationality?: string
+  dataQuality?: DataQualityFilter
+  limit?: number
+  page?: number
+}
+
+export async function searchCelebritiesAdmin({
+  query = '',
+  categorySlug,
+  nationality,
+  dataQuality,
+  limit = 50,
+  page = 1
+}: AdminSearchParams) {
+  try {
+    const where: Record<string, unknown> = {}
+
+    // Text search
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' as const } },
+        { profession: { contains: query, mode: 'insensitive' as const } },
+      ]
+    }
+
+    // Category filter
+    if (categorySlug) {
+      where.categories = {
+        some: {
+          slug: categorySlug
+        }
+      }
+    }
+
+    // Nationality filter
+    if (nationality) {
+      where.nationality = nationality
+    }
+
+    // Data quality filters
+    if (dataQuality) {
+      switch (dataQuality) {
+        case 'no_bio':
+          where.OR = [
+            { bio: null },
+            { bio: '' }
+          ]
+          break
+        case 'no_image':
+          where.AND = [
+            {
+              OR: [
+                { image: null },
+                { image: '' }
+              ]
+            },
+            {
+              images: { none: {} }
+            }
+          ]
+          break
+        case 'has_pending_reports':
+          where.reports = {
+            some: {
+              status: 'PENDING'
+            }
+          }
+          break
+        case 'no_faqs':
+          where.faqs = { none: {} }
+          break
+      }
+    }
+
+    const skip = (page - 1) * limit
+
+    const [celebrities, total] = await Promise.all([
+      prisma.celebrity.findMany({
+        where,
+        take: limit,
+        skip,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          categories: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            }
+          },
+          images: {
+            orderBy: { displayOrder: 'asc' }
+          },
+          faqs: {
+            orderBy: { displayOrder: 'asc' }
+          },
+          _count: {
+            select: {
+              reports: {
+                where: { status: 'PENDING' }
+              }
+            }
+          }
+        }
+      }),
+      prisma.celebrity.count({ where })
+    ])
+
+    return {
+      success: true,
+      data: {
+        celebrities,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Admin search celebrities error:', error)
     return { success: false, error: 'Arama yapılamadı' }
   }
 }
@@ -101,17 +248,19 @@ export async function createCelebrity(data: {
   image?: string
   categoryIds: string[]
   socialLinks?: SocialLinkInput[]
+  images?: ImageInput[]
+  faqs?: FAQInput[]
 }) {
   try {
     if (!data.name?.trim()) {
       return { success: false, error: 'İsim alanı zorunludur' }
     }
 
-    // YENİ: Zodiac (Burç) Hesaplama
+    // Zodiac (Burç) Hesaplama
     let zodiac = null
     if (data.birthDate) {
       const zInfo = calculateZodiac(data.birthDate)
-      if (zInfo) zodiac = zInfo.sign // 'aries', 'taurus' vb. döner
+      if (zInfo) zodiac = zInfo.sign
     }
 
     // Slug oluştur
@@ -132,6 +281,11 @@ export async function createCelebrity(data: {
       slugSuffix++
     }
 
+    // Determine main image URL for backward compatibility
+    const mainImageUrl = data.images && data.images.length > 0
+      ? data.images.find(img => img.isMain)?.url || data.images[0]?.url
+      : data.image?.trim() || null
+
     const celebrity = await prisma.celebrity.create({
       data: {
         name: data.name.trim(),
@@ -139,11 +293,11 @@ export async function createCelebrity(data: {
         nickname: data.nickname?.trim() || null,
         profession: data.profession?.trim() || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        zodiac, // Hesaplanan burç değeri
+        zodiac,
         birthPlace: data.birthPlace?.trim() || null,
         nationality: data.nationality?.trim() || null,
         bio: data.bio?.trim() || null,
-        image: data.image?.trim() || null,
+        image: mainImageUrl, // For backward compatibility
         categories: {
           connect: data.categoryIds.map(id => ({ id }))
         },
@@ -156,11 +310,39 @@ export async function createCelebrity(data: {
               displayOrder: link.displayOrder ?? index
             }))
           }
+        }),
+        // Images - nested create (max 3)
+        ...(data.images && data.images.length > 0 && {
+          images: {
+            create: data.images.slice(0, 3).map((img, index) => ({
+              url: img.url.trim(),
+              isMain: index === 0 ? true : (img.isMain ?? false),
+              displayOrder: img.displayOrder ?? index
+            }))
+          }
+        }),
+        // FAQs - nested create
+        ...(data.faqs && data.faqs.length > 0 && {
+          faqs: {
+            create: data.faqs
+              .filter(faq => faq.question.trim() && faq.answer.trim())
+              .map((faq, index) => ({
+                question: faq.question.trim(),
+                answer: faq.answer.trim(),
+                displayOrder: faq.displayOrder ?? index
+              }))
+          }
         })
       },
       include: {
         categories: true,
         socialMediaLinks: {
+          orderBy: { displayOrder: 'asc' }
+        },
+        images: {
+          orderBy: { displayOrder: 'asc' }
+        },
+        faqs: {
           orderBy: { displayOrder: 'asc' }
         }
       }
@@ -188,6 +370,8 @@ export async function updateCelebrity(
     image?: string
     categoryIds: string[]
     socialLinks?: SocialLinkInput[]
+    images?: ImageInput[]
+    faqs?: FAQInput[]
   }
 ) {
   try {
@@ -195,7 +379,7 @@ export async function updateCelebrity(
       return { success: false, error: 'İsim alanı zorunludur' }
     }
 
-    // YENİ: Zodiac (Burç) Hesaplama
+    // Zodiac (Burç) Hesaplama
     let zodiac = null
     if (data.birthDate) {
       const zInfo = calculateZodiac(data.birthDate)
@@ -232,15 +416,29 @@ export async function updateCelebrity(
       }
     }
 
-    // Social Media Links için deleteMany -> createMany stratejisi kullan
+    // Determine main image URL for backward compatibility
+    const mainImageUrl = data.images && data.images.length > 0
+      ? data.images.find(img => img.isMain)?.url || data.images[0]?.url
+      : data.image?.trim() || null
+
     // Transaction ile atomik işlem garantisi
     const celebrity = await prisma.$transaction(async (tx) => {
-      // Önce mevcut sosyal medya linklerini sil
+      // Mevcut sosyal medya linklerini sil
       await tx.socialMediaLink.deleteMany({
         where: { celebrityId: id }
       })
 
-      // Celebrity'yi güncelle ve yeni sosyal medya linklerini oluştur
+      // Mevcut resimleri sil
+      await tx.celebrityImage.deleteMany({
+        where: { celebrityId: id }
+      })
+
+      // Mevcut FAQ'ları sil
+      await tx.fAQ.deleteMany({
+        where: { celebrityId: id }
+      })
+
+      // Celebrity'yi güncelle ve yeni ilişkili verileri oluştur
       return tx.celebrity.update({
         where: { id },
         data: {
@@ -249,13 +447,13 @@ export async function updateCelebrity(
           nickname: data.nickname?.trim() || null,
           profession: data.profession?.trim() || null,
           birthDate: data.birthDate ? new Date(data.birthDate) : null,
-          zodiac, // Hesaplanan burç değeri
+          zodiac,
           birthPlace: data.birthPlace?.trim() || null,
           nationality: data.nationality?.trim() || null,
           bio: data.bio?.trim() || null,
-          image: data.image?.trim() || null,
+          image: mainImageUrl, // For backward compatibility
           categories: {
-            set: data.categoryIds.map(id => ({ id }))
+            set: data.categoryIds.map(categoryId => ({ id: categoryId }))
           },
           // Yeni sosyal medya linklerini oluştur
           ...(data.socialLinks && data.socialLinks.length > 0 && {
@@ -266,11 +464,39 @@ export async function updateCelebrity(
                 displayOrder: link.displayOrder ?? index
               }))
             }
+          }),
+          // Yeni resimleri oluştur (max 3)
+          ...(data.images && data.images.length > 0 && {
+            images: {
+              create: data.images.slice(0, 3).map((img, index) => ({
+                url: img.url.trim(),
+                isMain: index === 0 ? true : (img.isMain ?? false),
+                displayOrder: img.displayOrder ?? index
+              }))
+            }
+          }),
+          // Yeni FAQ'ları oluştur
+          ...(data.faqs && data.faqs.length > 0 && {
+            faqs: {
+              create: data.faqs
+                .filter(faq => faq.question.trim() && faq.answer.trim())
+                .map((faq, index) => ({
+                  question: faq.question.trim(),
+                  answer: faq.answer.trim(),
+                  displayOrder: faq.displayOrder ?? index
+                }))
+            }
           })
         },
         include: {
           categories: true,
           socialMediaLinks: {
+            orderBy: { displayOrder: 'asc' }
+          },
+          images: {
+            orderBy: { displayOrder: 'asc' }
+          },
+          faqs: {
             orderBy: { displayOrder: 'asc' }
           }
         }
@@ -299,5 +525,30 @@ export async function deleteCelebrity(id: string) {
   } catch (error) {
     console.error('Delete celebrity error:', error)
     return { success: false, error: 'Ünlü silinemedi' }
+  }
+}
+
+// Get all unique nationalities for filter dropdown
+export async function getUniqueNationalities() {
+  try {
+    const celebrities = await prisma.celebrity.findMany({
+      where: {
+        nationality: { not: null }
+      },
+      select: {
+        nationality: true
+      },
+      distinct: ['nationality']
+    })
+
+    const nationalities = celebrities
+      .map(c => c.nationality)
+      .filter((n): n is string => n !== null)
+      .sort()
+
+    return { success: true, data: nationalities }
+  } catch (error) {
+    console.error('Get nationalities error:', error)
+    return { success: false, error: 'Uyruklar alınamadı' }
   }
 }

@@ -38,6 +38,42 @@ export interface SocialMediaLinkInput {
   displayOrder?: number
 }
 
+// Celebrity Image type (multi-image carousel support)
+export interface CelebrityImage {
+  id: string
+  url: string
+  isMain: boolean
+  displayOrder: number
+  celebrityId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Celebrity Image Input for form submissions
+export interface CelebrityImageInput {
+  url: string
+  isMain?: boolean
+  displayOrder?: number
+}
+
+// FAQ type for SEO-optimized FAQ section
+export interface FAQ {
+  id: string
+  question: string
+  answer: string
+  displayOrder: number
+  celebrityId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// FAQ Input for form submissions
+export interface FAQInput {
+  question: string
+  answer: string
+  displayOrder?: number
+}
+
 // Core Celebrity type from Prisma
 export interface Celebrity {
   id: string
@@ -48,12 +84,14 @@ export interface Celebrity {
   birthPlace?: string | null
   nationality?: string | null
   bio?: string | null
-  image?: string | null
+  image?: string | null // @deprecated - Use images array instead
   slug: string
   zodiac?: string | null
   createdAt: Date
   updatedAt: Date
   categories?: Category[]
+  images?: CelebrityImage[]
+  faqs?: FAQ[]
   socialMediaLinks?: SocialMediaLink[]
 }
 
@@ -66,9 +104,27 @@ export interface CelebrityFormData {
   birthPlace?: string
   nationality?: string
   bio?: string
-  image?: string
+  image?: string // @deprecated - Use images array instead
   categoryIds?: string[]
   socialLinks?: SocialMediaLinkInput[]
+  images?: CelebrityImageInput[]
+  faqs?: FAQInput[]
+}
+
+// Admin search filter types for advanced filtering
+export type DataQualityFilter =
+  | 'no_bio'
+  | 'no_image'
+  | 'has_pending_reports'
+  | 'no_faqs'
+
+export interface AdminSearchParams {
+  query?: string
+  category?: string
+  nationality?: string
+  dataQuality?: DataQualityFilter
+  page?: number
+  limit?: number
 }
 
 // API Response types for better type safety

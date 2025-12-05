@@ -21,6 +21,12 @@ async function getCelebrity(slug: string) {
         categories: true,
         socialMediaLinks: {
           orderBy: { displayOrder: 'asc' }
+        },
+        images: {
+          orderBy: { displayOrder: 'asc' }
+        },
+        faqs: {
+          orderBy: { displayOrder: 'asc' }
         }
       }
     })

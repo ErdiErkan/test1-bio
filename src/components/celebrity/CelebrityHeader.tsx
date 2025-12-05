@@ -1,10 +1,9 @@
 "use client"
 
-import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { calculateZodiac, getCountryInfo } from '@/lib/celebrity'
-import type { SocialPlatform } from '@/lib/types'
+import type { SocialPlatform, CelebrityImage } from '@/lib/types'
+import ImageCarousel from './ImageCarousel'
 
 // Sosyal medya platform konfigürasyonu - SVG ikonlar ve hover renkleri
 const SOCIAL_PLATFORM_CONFIG: Record<
@@ -111,7 +110,8 @@ interface Celebrity {
   birthDate?: Date | string | null
   birthPlace?: string | null
   nationality?: string | null
-  image?: string | null
+  image?: string | null // @deprecated - Use images array instead
+  images?: CelebrityImage[]
   slug: string
   updatedAt?: Date | string
   socialMediaLinks?: SocialMediaLink[]
@@ -122,8 +122,6 @@ interface CelebrityHeaderProps {
 }
 
 export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
-  const [imageError, setImageError] = useState(false)
-
   const formatDate = (dateString?: Date | string | null) => {
     if (!dateString) return null
     return new Date(dateString).toLocaleDateString('tr-TR', {
@@ -153,42 +151,32 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
 
   const birthDate = celebrity.birthDate ? new Date(celebrity.birthDate) : null
   const birthYear = birthDate?.getFullYear()
-  
-  // Cache busting için versiyon numarası (updatedAt varsa o, yoksa '1')
-  const imageVersion = celebrity.updatedAt 
-    ? new Date(celebrity.updatedAt).getTime() 
-    : '1'
 
-  // ✅ KRİTİK EKLENTİ: Resim URL Güvenlik Kontrolü
-  // Dış kaynaklı (http/https) resimlerde ?v= parametresi hataya sebep olabilir.
-  // Bu fonksiyon sadece yerel (kendi sunucumuzdaki) resimlere versiyon ekler.
-  const getSafeImageUrl = (url: string | null | undefined) => {
-    if (!url) return ''
-    if (url.startsWith('http')) return url
-    return `${url}?v=${imageVersion}`
-  }
+  // Prepare images for carousel - prefer new images array, fallback to legacy image field
+  const carouselImages: CelebrityImage[] = celebrity.images && celebrity.images.length > 0
+    ? celebrity.images
+    : celebrity.image
+      ? [{
+          id: 'legacy-image',
+          url: celebrity.image,
+          isMain: true,
+          displayOrder: 0,
+          celebrityId: celebrity.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }]
+      : []
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       <div className="md:flex">
-        {/* Fotoğraf Alanı */}
+        {/* Fotoğraf Alanı - Image Carousel */}
         <div className="md:w-1/3">
-          <div className="aspect-[3/4] relative bg-gray-100 flex items-center justify-center overflow-hidden">
-            {celebrity.image && !imageError ? (
-              <img
-                src={getSafeImageUrl(celebrity.image)}
-                alt={celebrity.name}
-                className="w-full h-full object-cover"
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-blue-600">
-                <span className="text-9xl font-bold text-white select-none">
-                  {celebrity.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-          </div>
+          <ImageCarousel
+            images={carouselImages}
+            celebrityName={celebrity.name}
+            fallbackLetter={celebrity.name.charAt(0).toUpperCase()}
+          />
         </div>
 
         {/* Bilgiler Alanı */}

@@ -118,6 +118,7 @@ async function main() {
     })
 
     if (!existingKemal) {
+      const kemalImageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Kemal_Sunal.jpg/400px-Kemal_Sunal.jpg'
       await prisma.celebrity.create({
         data: {
           name: 'Kemal Sunal',
@@ -126,13 +127,36 @@ async function main() {
           birthDate: new Date('1944-11-11'),
           birthPlace: 'İstanbul, Türkiye',
           bio: 'Türk sinema tarihinin en sevilen oyuncularından biri olan Kemal Sunal, özellikle komedi filmleriyle tanınmıştır.',
-          image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Kemal_Sunal.jpg/400px-Kemal_Sunal.jpg',
+          image: kemalImageUrl, // Keep for backward compatibility
           categories: {
             connect: [{ id: oyuncuCategory.id }]
+          },
+          // New: Create image in CelebrityImage table
+          images: {
+            create: {
+              url: kemalImageUrl,
+              isMain: true,
+              displayOrder: 0
+            }
+          },
+          // New: Sample FAQs for SEO
+          faqs: {
+            create: [
+              {
+                question: 'Kemal Sunal hangi yıl doğdu?',
+                answer: 'Kemal Sunal, 11 Kasım 1944 tarihinde İstanbul\'da doğmuştur.',
+                displayOrder: 0
+              },
+              {
+                question: 'Kemal Sunal en çok hangi filmleriyle tanınır?',
+                answer: 'Kemal Sunal en çok "Şaban" serisi, "Hababam Sınıfı" serisi ve "Tosun Paşa" gibi komedi filmleriyle tanınmaktadır.',
+                displayOrder: 1
+              }
+            ]
           }
         }
       })
-      console.log('✅ Sample celebrity created: Kemal Sunal')
+      console.log('✅ Sample celebrity created: Kemal Sunal (with images and FAQs)')
     }
   }
 
@@ -143,6 +167,7 @@ async function main() {
     })
 
     if (!existingBaris) {
+      const barisImageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Bar%C4%B1%C5%9F_Man%C3%A7o_1988.jpg/400px-Bar%C4%B1%C5%9F_Man%C3%A7o_1988.jpg'
       await prisma.celebrity.create({
         data: {
           name: 'Barış Manço',
@@ -151,13 +176,31 @@ async function main() {
           birthDate: new Date('1943-01-02'),
           birthPlace: 'İstanbul, Türkiye',
           bio: 'Türk rock müziğinin öncülerinden olan Barış Manço, televizyon programcılığı da yapmıştır.',
-          image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Bar%C4%B1%C5%9F_Man%C3%A7o_1988.jpg/400px-Bar%C4%B1%C5%9F_Man%C3%A7o_1988.jpg',
+          image: barisImageUrl, // Keep for backward compatibility
           categories: {
             connect: [{ id: muzisyenCategory.id }]
+          },
+          // New: Create image in CelebrityImage table
+          images: {
+            create: {
+              url: barisImageUrl,
+              isMain: true,
+              displayOrder: 0
+            }
+          },
+          // New: Sample FAQs for SEO
+          faqs: {
+            create: [
+              {
+                question: 'Barış Manço hangi müzik türünde eserler vermiştir?',
+                answer: 'Barış Manço, Anadolu rock ve Türk pop müziğinin öncülerinden biri olarak bilinir. Geleneksel Türk müziğini rock müzikle harmanlayan özgün bir tarz geliştirmiştir.',
+                displayOrder: 0
+              }
+            ]
           }
         }
       })
-      console.log('✅ Sample celebrity created: Barış Manço')
+      console.log('✅ Sample celebrity created: Barış Manço (with images and FAQs)')
     }
   }
 

@@ -16,6 +16,14 @@ async function getCelebrity(id: string) {
         },
         socialMediaLinks: {
           orderBy: { displayOrder: 'asc' }
+        },
+        // ✅ EKLENEN: Resimleri çek
+        images: {
+          orderBy: { displayOrder: 'asc' }
+        },
+        // ✅ EKLENEN: SSS'leri çek
+        faqs: {
+          orderBy: { displayOrder: 'asc' }
         }
       }
     })

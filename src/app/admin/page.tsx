@@ -1,5 +1,6 @@
 "use client"
 
+import Image from 'next/image'
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -33,7 +34,7 @@ const CelebrityAvatar = ({ celebrity }: { celebrity: Celebrity }) => {
 
   if (imageUrl && !error) {
     return (
-      <img
+      <Image
         src={`${imageUrl}?v=${new Date().getTime()}`}
         alt={celebrity.name}
         className="h-10 w-10 rounded-full object-cover border border-gray-200"

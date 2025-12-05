@@ -131,26 +131,36 @@ export default function ImageCarousel({
       aria-roledescription="carousel"
     >
       {/* Main Image - Only current image is loaded with priority */}
-      {validImages.map((image, index) => (
-        <div
-          key={image.id}
-          className={`absolute inset-0 transition-opacity duration-300 ${
-            index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
-          }`}
-          aria-hidden={index !== currentIndex}
-        >
-          <Image
-            src={image.url}
-            alt={`${celebrityName} - Fotoğraf ${index + 1}`}
-            fill
-            sizes="(max-width: 768px) 100vw, 33vw"
-            className="object-cover"
-            priority={index === currentIndex}
-            loading={index === currentIndex ? 'eager' : 'lazy'}
-            onError={() => handleImageError(image.id)}
-          />
-        </div>
-      ))}
+      {validImages.map((image, index) => {
+        
+        // ✅ URL DÜZELTME MANTIĞI BURADA
+        let imageUrl = image.url;
+        if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:') && !imageUrl.startsWith('/')) {
+          imageUrl = `/${imageUrl}`;
+        }
+
+        return (
+          <div
+            key={image.id}
+            className={`absolute inset-0 transition-opacity duration-300 ${
+              index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            }`}
+            aria-hidden={index !== currentIndex}
+          >
+            <Image
+              src={imageUrl} // ✅ Düzeltilmiş URL kullanılıyor
+              alt={`${celebrityName} - Fotoğraf ${index + 1}`}
+              fill
+              sizes="(max-width: 768px) 100vw, 33vw"
+              className="object-cover"
+              priority={index === currentIndex}
+              loading={index === currentIndex ? 'eager' : 'lazy'}
+              onError={() => handleImageError(image.id)}
+              unoptimized // Docker volume ve harici resimler için gerekli
+            />
+          </div>
+        )
+      })}
 
       {/* Navigation Arrows - Only show when multiple images and hovering */}
       {hasMultipleImages && (
@@ -246,7 +256,7 @@ export default function ImageCarousel({
         </>
       )}
 
-      {/* Mobile swipe hint - only show briefly on first interaction */}
+      {/* Mobile swipe hint */}
       {hasMultipleImages && (
         <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 md:hidden">
           <p className="text-white/70 text-xs bg-black/30 px-3 py-1 rounded-full">

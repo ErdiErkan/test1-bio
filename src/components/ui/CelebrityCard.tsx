@@ -10,6 +10,7 @@ interface Celebrity {
   profession?: string | null
   birthDate?: Date | string | null
   image?: string | null
+  images?: { url: string }[]
   slug: string
 }
 
@@ -47,14 +48,23 @@ export default function CelebrityCard({ celebrity }: CelebrityCardProps) {
 
   const age = calculateAge(celebrity.birthDate)
   
-  // Image URL işleme
+  // Image URL işleme (GÜNCELLENDİ)
   let imageUrl = getPlaceholderImage(celebrity.name)
-  if (celebrity.image && !imageError) {
-    if (celebrity.image.startsWith('http')) {
+  
+  if (!imageError) {
+    // 1. Önce yeni sistemdeki images dizisine bak (ilk eleman ana resim varsayılır)
+    if (celebrity.images && celebrity.images.length > 0) {
+      imageUrl = celebrity.images[0].url
+    } 
+    // 2. Yoksa eski image alanına bak
+    else if (celebrity.image) {
       imageUrl = celebrity.image
-    } else {
-      imageUrl = celebrity.image.startsWith('/') ? celebrity.image : `/${celebrity.image}`
     }
+  }
+
+  // URL düzeltme (Relative path kontrolü ve garanti altına alma)
+  if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:') && !imageUrl.startsWith('/')) {
+    imageUrl = `/${imageUrl}`
   }
 
   return (
@@ -82,6 +92,7 @@ export default function CelebrityCard({ celebrity }: CelebrityCardProps) {
             setImageError(true)
             setImageLoading(false)
           }}
+          unoptimized // Harici URL'ler veya blob için garanti olsun
         />
       </div>
 

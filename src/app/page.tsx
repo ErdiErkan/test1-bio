@@ -79,6 +79,11 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
         image: true,
         slug: true,
         // zodiac: true, // İsterseniz burç bilgisini de çekebilirsiniz
+        images: {
+          where: { isMain: true },
+          take: 1,
+          select: { url: true }
+        }
       }
     })
     return celebrities

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/useToast'
@@ -123,23 +124,37 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
   const [images, setImages] = useState<ImageFormItem[]>(() => {
     // Initialize from existing images
     if (celebrity?.images && celebrity.images.length > 0) {
-      return celebrity.images.map((img, index) => ({
-        id: generateId(),
-        url: img.url,
-        file: null,
-        preview: img.url,
-        isMain: img.isMain || index === 0,
-        isUploading: false,
-        error: false
-      }))
+      return celebrity.images.map((img, index) => {
+        // ✅ 1. DÜZELTME: URL Sanitization (Başına slash ekleme)
+        let safeUrl = img.url;
+        if (safeUrl && !safeUrl.startsWith('http') && !safeUrl.startsWith('data:') && !safeUrl.startsWith('/')) {
+          safeUrl = `/${safeUrl}`;
+        }
+
+        return {
+          id: generateId(),
+          url: safeUrl,
+          file: null,
+          preview: safeUrl, // Preview için de güvenli URL kullan
+          isMain: img.isMain || index === 0,
+          isUploading: false,
+          error: false
+        }
+      })
     }
     // Fallback to legacy image field
     if (celebrity?.image) {
+      // ✅ Legacy image için de aynı kontrol
+      let safeUrl = celebrity.image;
+      if (safeUrl && !safeUrl.startsWith('http') && !safeUrl.startsWith('data:') && !safeUrl.startsWith('/')) {
+        safeUrl = `/${safeUrl}`;
+      }
+
       return [{
         id: generateId(),
-        url: celebrity.image,
+        url: safeUrl,
         file: null,
-        preview: celebrity.image,
+        preview: safeUrl,
         isMain: true,
         isUploading: false,
         error: false
@@ -177,7 +192,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     loadCategories()
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
     if (errors[name]) {
@@ -579,7 +594,7 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
           <select
             name="nationality"
             value={formData.nationality}
-            onChange={(e) => handleChange(e as React.ChangeEvent<HTMLInputElement>)}
+            onChange={handleChange}
             className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
               errors.nationality ? 'border-red-500' : 'border-gray-300'
             }`}
@@ -686,11 +701,14 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
                   img.isMain ? 'border-blue-500' : 'border-gray-200'
                 } ${img.error ? 'border-red-500' : ''}`}
               >
-                {/* Image Preview */}
-                <img
+                {/* Image Preview - ✅ 2. DÜZELTME: next/image Kullanımı */}
+                <Image
                   src={img.preview}
                   alt={`Fotoğraf ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  unoptimized // ✅ 3. DÜZELTME: Local upload ve Docker volume uyumu için
                   onError={() => {
                     setImages(prev =>
                       prev.map(x => (x.id === img.id ? { ...x, error: true } : x))
@@ -700,20 +718,20 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
 
                 {/* Loading Overlay */}
                 {img.isUploading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                   </div>
                 )}
 
                 {/* Main Badge */}
                 {img.isMain && (
-                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded z-10">
                     Ana Resim
                   </div>
                 )}
 
                 {/* Action Buttons */}
-                <div className="absolute top-2 right-2 flex gap-1">
+                <div className="absolute top-2 right-2 flex gap-1 z-10">
                   {!img.isMain && (
                     <button
                       type="button"

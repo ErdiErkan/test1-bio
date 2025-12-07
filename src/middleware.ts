@@ -1,32 +1,40 @@
-import { auth } from '@/lib/auth'
-import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import createMiddleware from 'next-intl/middleware';
+import { routing } from './i18n/routing';
+import NextAuth from 'next-auth';
+import { authConfig } from '@/lib/auth.config';
+
+const { auth } = NextAuth(authConfig);
+const intlMiddleware = createMiddleware(routing);
 
 export default auth((req) => {
-  const { pathname } = req.nextUrl
+  const { pathname } = req.nextUrl;
 
-  // Admin rotalarını koru
-  if (pathname.startsWith('/admin')) {
+  // 1. Admin Route Protection Strategy
+  // Check if path contains /admin (e.g. /en/admin, /tr/admin, /admin)
+  const isAdminPath = pathname.includes('/admin');
+
+  if (isAdminPath) {
+    // If user is not logged in
     if (!req.auth) {
-      // Kullanıcı giriş yapmamış
-      const loginUrl = new URL('/login', req.url)
-      loginUrl.searchParams.set('callbackUrl', pathname)
-      return NextResponse.redirect(loginUrl)
+      const loginUrl = new URL('/login', req.nextUrl.origin);
+      // Preserve the return URL
+      loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Optional: Role Based Access Control (RBAC)
+    if ((req.auth.user as any)?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/', req.nextUrl.origin));
     }
   }
 
-  return NextResponse.next()
-})
+  // 2. Internationalization Routing
+  return intlMiddleware(req);
+});
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/auth (NextAuth routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-}
+  // Skip all internal paths (_next), api routes, and static files
+  matcher: ['/((?!api|_next|.*\\..*).*)']
+};

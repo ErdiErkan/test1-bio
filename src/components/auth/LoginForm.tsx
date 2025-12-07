@@ -4,10 +4,12 @@
 import { useActionState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import { loginAction } from '@/actions/auth'
-import { useRouter } from 'next/navigation' // Yönlendirme için eklendi
+import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 function SubmitButton() {
   const { pending } = useFormStatus()
+  const t = useTranslations('auth')
 
   return (
     <button
@@ -18,10 +20,10 @@ function SubmitButton() {
       {pending ? (
         <>
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-          Giriş yapılıyor...
+          {t('logging_in')}
         </>
       ) : (
-        'Giriş Yap'
+        t('login_btn')
       )}
     </button>
   )
@@ -29,30 +31,25 @@ function SubmitButton() {
 
 export default function LoginForm() {
   const router = useRouter()
-  // initialState içine success alanını da ekliyoruz
+  const t = useTranslations('auth')
   const [state, action] = useActionState(loginAction, { message: '', error: false, success: false })
 
-  // State değiştiğinde çalışır: Eğer başarı varsa yönlendir
   useEffect(() => {
     if (state?.success) {
-      // Refresh yaparak yönlendir ki session cookie tam algılansın
       window.location.href = '/admin'
-      // Alternatif: router.push('/admin') -> router.refresh()
     }
   }, [state, router])
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-8">
       <form action={action} className="space-y-6">
-        
-        {/* Hata Mesajı */}
+
         {state?.error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-pulse">
             {state.message}
           </div>
         )}
 
-        {/* Başarı Mesajı (Yönlendirme sırasında kısa süreli görünür) */}
         {state?.success && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm animate-pulse">
             {state.message}
@@ -61,11 +58,11 @@ export default function LoginForm() {
 
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-            Email Adresi
+            {t('email')}
           </label>
           <input
             id="email"
-            name="email" 
+            name="email"
             type="email"
             required
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
@@ -75,7 +72,7 @@ export default function LoginForm() {
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-            Şifre
+            {t('password')}
           </label>
           <input
             id="password"

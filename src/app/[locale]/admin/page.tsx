@@ -37,6 +37,8 @@ const CelebrityAvatar = ({ celebrity }: { celebrity: Celebrity }) => {
       <Image
         src={`${imageUrl}?v=${new Date().getTime()}`}
         alt={celebrity.name}
+        width={40}
+        height={40}
         className="h-10 w-10 rounded-full object-cover border border-gray-200"
         onError={() => setError(true)}
       />

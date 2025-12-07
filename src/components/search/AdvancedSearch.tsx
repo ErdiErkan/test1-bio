@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { searchCelebrities } from '@/actions/celebrities'
-import Link from 'next/link'
+import { Link } from '@/i18n/routing'
 import Image from 'next/image'
+import { useLocale, useTranslations } from 'next-intl'
 
 interface Celebrity {
   id: string
@@ -27,6 +28,11 @@ interface AdvancedSearchProps {
 
 export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
   const router = useRouter()
+  const locale = useLocale()
+  const t = useTranslations('search')
+  const tCommon = useTranslations('common')
+  const tCelebrity = useTranslations('celebrity')
+
   const searchParams = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '')
@@ -60,7 +66,8 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
         const result = await searchCelebrities({
           query,
           categorySlug: selectedCategory || undefined,
-          limit: 5
+          limit: 5,
+          locale
         })
 
         if (result.success && result.data) {
@@ -80,7 +87,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
         clearTimeout(debounceTimer.current)
       }
     }
-  }, [query, selectedCategory])
+  }, [query, selectedCategory, locale])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -112,13 +119,13 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ünlü ara (Örn: Kemal Sunal, oyuncu...)"
+            placeholder={t('placeholder')}
             className="w-full px-6 py-4 pr-12 text-lg text-gray-900 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
           />
           <button
             type="submit"
             className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-blue-600 transition-colors"
-            aria-label="Ara"
+            aria-label={tCommon('search')}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -163,7 +170,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">{celebrity.name}</div>
                   <div className="text-sm text-gray-500">
-                    {celebrity.profession || 'Meslek belirtilmemiş'}
+                    {celebrity.profession || tCelebrity('profession_unknown')}
                     {celebrity.categories && celebrity.categories.length > 0 && (
                       <span className="ml-2">
                         • {celebrity.categories.map(c => c.name).join(', ')}
@@ -184,23 +191,21 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => handleCategoryChange('')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            !selectedCategory
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${!selectedCategory
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
         >
-          Tümü
+          {t('all')}
         </button>
         {categories.map((category) => (
           <button
             key={category.id}
             onClick={() => handleCategoryChange(category.slug)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              selectedCategory === category.slug
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedCategory === category.slug
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             {category.name}
           </button>
@@ -210,10 +215,10 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
       {/* Aktif Filtreler */}
       {(query || selectedCategory) && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-white font-medium">Aktif filtreler:</span>
+          <span className="text-white font-medium">{tCommon('active_filters')}:</span>
           {query && (
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
-              Arama: {query}
+              {tCommon('search_label')}: {query}
               <button
                 onClick={() => {
                   setQuery('')
@@ -227,7 +232,7 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
           )}
           {selectedCategory && (
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
-              Kategori: {categories.find(c => c.slug === selectedCategory)?.name}
+              {tCommon('category')}: {categories.find(c => c.slug === selectedCategory)?.name}
               <button
                 onClick={() => {
                   setSelectedCategory('')

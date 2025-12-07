@@ -1,0 +1,113 @@
+{
+    "common": {
+        "back": "Geri",
+        "home": "Ana Sayfa",
+        "search": "Ara",
+        "cancel": "İptal",
+        "save": "Kaydet",
+        "copyright": "© {year} CelebHub. Tüm hakları saklıdır.",
+        "loading": "Yükleniyor...",
+        "active_filters": "Aktif filtreler",
+        "category": "Kategori",
+        "nationality": "Uyruk",
+        "search_label": "Arama",
+        "search_btn": "Ara",
+        "clear_search": "Aramayı Temizle"
+    },
+    "nav": {
+        "home": "Ana Sayfa",
+        "admin": "Admin",
+        "switch_language": "Dil Değiştir"
+    },
+    "auth": {
+        "login_title": "CelebHub Yönetici Girişi",
+        "email": "E-posta Adresi",
+        "password": "Şifre",
+        "login_btn": "Giriş Yap",
+        "logging_in": "Giriş yapılıyor..."
+    },
+    "celebrity": {
+        "born": "Doğum Tarihi",
+        "born_place": "Doğum Yeri",
+        "age": "{age} yaşında",
+        "age_simple": "yaşında",
+        "zodiac": "Burç",
+        "nationality": "Uyruk",
+        "biography": "Biyografi",
+        "no_bio_title": "Biyografi Henüz Eklenmemiş",
+        "no_bio_desc": "Bu ünlünün biyografisi henüz eklenmemiş. Admin panelinden ekleyebilirsiniz.",
+        "profession_unknown": "Meslek belirtilmemiş",
+        "report_error": "Hata Bildir",
+        "zodiac_signs": {
+            "capricorn": "Oğlak",
+            "aquarius": "Kova",
+            "pisces": "Balık",
+            "aries": "Koç",
+            "taurus": "Boğa",
+            "gemini": "İkizler",
+            "cancer": "Yengeç",
+            "leo": "Aslan",
+            "virgo": "Başak",
+            "libra": "Terazi",
+            "scorpio": "Akrep",
+            "sagittarius": "Yay"
+        }
+    },
+    "admin": {
+        "filters": {
+            "search_placeholder": "İsim veya meslek ara...",
+            "all_categories": "Tüm Kategoriler",
+            "all_nationalities": "Tüm Uyruklar",
+            "data_quality": "Veri Kalitesi",
+            "data_issues": "Veri Sorunları",
+            "no_bio": "Biyografisi Yok",
+            "no_image": "Resmi Yok",
+            "pending_reports": "Bekleyen Raporlar",
+            "no_faqs": "SSS'i Yok",
+            "clear": "Filtreleri Temizle"
+        },
+        "form": {
+            "title_new": "Yeni Ünlü Ekle",
+            "title_edit": "Ünlü Düzenle",
+            "general_info": "Genel Bilgiler (Tüm Diller)",
+            "birth_date": "Doğum Tarihi",
+            "gender": "Cinsiyet",
+            "select": "Seçiniz...",
+            "male": "Erkek",
+            "female": "Kadın",
+            "faqs": "Sıkça Sorulan Sorular",
+            "add_faq": "Soru Ekle",
+            "question": "Soru",
+            "answer": "Cevap",
+            "language_specific_details": "Özel Detayları",
+            "other": "Diğer",
+            "categories": "Kategoriler",
+            "photos": "Fotoğraflar",
+            "add_photo": "+ Ekle",
+            "translation_title": "{lang} Çevirisi",
+            "cancel": "İptal",
+            "save": "Kaydet",
+            "update": "Güncelle",
+            "saving": "Kaydediliyor...",
+            "success": "İşlem başarılı",
+            "success_update": "Güncelleme başarılı!",
+            "error": "Hata oluştu",
+            "error_validation": "Form validasyonu başarısız oldu. Lütfen alanları kontrol edin.",
+            "fields": {
+                "name": "İsim Soyisim",
+                "nickname": "Takma Ad / Lakap",
+                "profession": "Meslek",
+                "slug": "URL Slug (Opsiyonel)",
+                "birthPlace": "Doğum Yeri",
+                "nationality": "Uyruk (Yazı)",
+                "zodiac": "Burç",
+                "altText": "Resim Alt Metni (SEO)",
+                "bio": "Biyografi"
+            }
+        }
+    },
+    "search": {
+        "placeholder": "Ünlü ara (Örn: Kemal Sunal, oyuncu...)",
+        "all": "Tümü"
+    }
+}

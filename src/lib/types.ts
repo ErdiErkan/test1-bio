@@ -61,6 +61,7 @@ export interface FAQ {
   id: string
   question: string
   answer: string
+  language: 'EN' | 'TR' | 'ES' | 'IT' | 'PT' | 'FR' | 'DE'
   displayOrder: number
   celebrityId: string
   createdAt: Date

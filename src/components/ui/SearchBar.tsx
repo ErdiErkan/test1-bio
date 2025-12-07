@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 interface SearchBarProps {
   placeholder?: string
@@ -11,7 +12,7 @@ interface SearchBarProps {
 }
 
 export default function SearchBar({
-  placeholder = "Ünlü ara...",
+  placeholder,
   onSearch,
   initialValue = '',
   clearAfterSearch = true
@@ -19,10 +20,14 @@ export default function SearchBar({
   const [query, setQuery] = useState(initialValue)
   const [isSearching, setIsSearching] = useState(false)
   const router = useRouter()
+  const t = useTranslations('common')
+  const tSearch = useTranslations('search')
+
+  const effectivePlaceholder = placeholder || tSearch('placeholder')
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const trimmedQuery = query.trim()
     if (!trimmedQuery) return
 
@@ -32,11 +37,9 @@ export default function SearchBar({
       if (onSearch) {
         onSearch(trimmedQuery)
       } else {
-        // FIX: Syntax hatası düzeltildi - backtick yerine parantez
-        router.push(`/?search=${encodeURIComponent(trimmedQuery)}`)
+        router.push(`/?q=${encodeURIComponent(trimmedQuery)}`)
       }
 
-      // Arama sonrası input'u temizle
       if (clearAfterSearch) {
         setQuery('')
       }
@@ -61,19 +64,18 @@ export default function SearchBar({
           type="text"
           value={query}
           onChange={handleInputChange}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           disabled={isSearching}
           autoComplete="off"
           className="w-full px-6 py-4 pr-32 text-lg text-gray-900 bg-white border-2 border-gray-300 rounded-full focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow-sm placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         />
-        
-        {/* Temizle butonu - sadece değer varken göster */}
+
         {query && (
           <button
             type="button"
             onClick={handleClear}
             className="absolute right-24 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 transition-colors"
-            aria-label="Aramayı temizle"
+            aria-label={t('clear_search')}
           >
             ✕
           </button>
@@ -93,7 +95,7 @@ export default function SearchBar({
               ...
             </span>
           ) : (
-            '🔍 Ara'
+            `🔍 ${t('search_btn')}`
           )}
         </button>
       </div>

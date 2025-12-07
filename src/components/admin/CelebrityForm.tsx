@@ -1,25 +1,53 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/useToast'
-import { validateCelebrityForm } from '@/lib/validations'
 import { uploadImage } from '@/actions/upload'
 import { createCelebrity, updateCelebrity } from '@/actions/celebrities'
 import { getCategories } from '@/actions/categories'
-import { getAllCountries } from '@/lib/celebrity'
-import type { SocialPlatform, CelebrityImage, FAQ } from '@/lib/types'
+import type { SocialPlatform } from '@/lib/types'
+import { useTranslations } from 'next-intl'
+import { getAllCountries } from 'countries-and-timezones'
 
-// --- TİP TANIMLARI ---
+// --- TYPES & INTERFACES ---
 
-interface SocialLinkFormItem {
-  id: string
-  platform: SocialPlatform | ''
-  url: string
+const COUNTRIES = Object.values(getAllCountries()).map(c => ({
+  name: c.name,
+  code: c.id
+})).sort((a, b) => a.name.localeCompare(b.name))
+
+type Language = 'EN' | 'TR' | 'ES' | 'IT' | 'PT' | 'FR' | 'DE'
+
+const LANGUAGES: { code: Language; label: string; flag: string }[] = [
+  { code: 'EN', label: 'English', flag: '🇺🇸' },
+  { code: 'TR', label: 'Türkçe', flag: '🇹🇷' },
+  { code: 'ES', label: 'Español', flag: '🇪🇸' },
+  { code: 'IT', label: 'Italiano', flag: '🇮🇹' },
+  { code: 'PT', label: 'Português', flag: '🇵🇹' },
+  { code: 'FR', label: 'Français', flag: '🇫🇷' },
+  { code: 'DE', label: 'Deutsch', flag: '🇩🇪' },
+]
+
+// Configuration-Driven Fields
+interface FieldConfig {
+  key: string
+  type: 'text' | 'textarea' | 'select'
+  required?: boolean
+  rows?: number // for textarea
+  options?: { label: string; value: string }[] // for select
 }
 
-interface ImageFormItem {
+// Language Specific Fields
+const LANGUAGE_SPECIFIC_FIELDS: FieldConfig[] = [
+  { key: 'profession', type: 'text', required: true },
+  { key: 'nickname', type: 'text' },
+  { key: 'altText', type: 'text' },
+  { key: 'bio', type: 'textarea', rows: 6 },
+]
+
+interface ImageInput {
   id: string
   url: string
   file: File | null
@@ -29,166 +57,265 @@ interface ImageFormItem {
   error: boolean
 }
 
-interface FAQFormItem {
+interface CommonData {
+  birthDate: string
+  gender: string
+  categoryIds: string[]
+  images: ImageInput[]
+}
+
+// "SharedState" holds values that populate all languages automatically
+interface SharedState {
+  name: string
+  birthPlace: string
+  nationality: string
+}
+
+interface TranslationData {
+  name: string
+  nickname: string
+  profession: string
+  slug: string
+  birthPlace: string
+  nationality: string
+  zodiac: string
+  bio: string
+  altText: string
+  faqs: FAQInput[]
+  [key: string]: any
+}
+
+type FormState = {
+  common: CommonData
+  shared: SharedState
+  translations: Record<Language, TranslationData>
+}
+
+interface SocialLinkInput {
+  id: string
+  platform: SocialPlatform | ''
+  url: string
+}
+
+interface FAQInput {
   id: string
   question: string
   answer: string
 }
 
-interface SocialMediaLink {
-  id: string
-  platform: SocialPlatform
-  url: string
-  displayOrder: number
-}
-
-interface Celebrity {
-  id: string
-  name: string
-  nickname?: string | null
-  profession?: string | null
-  birthDate?: Date | string | null
-  birthPlace?: string | null
-  nationality?: string | null
-  bio?: string | null
-  image?: string | null
-  images?: CelebrityImage[]
-  faqs?: FAQ[]
-  categories?: { id: string; name: string }[]
-  socialMediaLinks?: SocialMediaLink[]
-}
-
 interface CelebrityFormProps {
-  celebrity?: Celebrity
+  celebrity?: any
   isEdit?: boolean
 }
 
 interface Category {
   id: string
   name: string
-  slug: string
 }
 
-// --- KONFİGÜRASYON ---
-
-const SOCIAL_PLATFORMS: {
-  value: SocialPlatform
-  label: string
-  placeholder: string
-  icon: string
-}[] = [
-  { value: 'INSTAGRAM', label: 'Instagram', placeholder: 'https://instagram.com/kullaniciadi', icon: '📷' },
-  { value: 'TWITTER', label: 'Twitter / X', placeholder: 'https://twitter.com/kullaniciadi', icon: '𝕏' },
-  { value: 'YOUTUBE', label: 'YouTube', placeholder: 'https://youtube.com/@kanal', icon: '▶️' },
-  { value: 'TIKTOK', label: 'TikTok', placeholder: 'https://tiktok.com/@kullaniciadi', icon: '🎵' },
-  { value: 'FACEBOOK', label: 'Facebook', placeholder: 'https://facebook.com/sayfa', icon: '👤' },
-  { value: 'LINKEDIN', label: 'LinkedIn', placeholder: 'https://linkedin.com/in/kullaniciadi', icon: '💼' },
-  { value: 'WEBSITE', label: 'Website', placeholder: 'https://www.ornek.com', icon: '🌐' },
-  { value: 'IMDB', label: 'IMDb', placeholder: 'https://imdb.com/name/nm123456', icon: '🎬' },
-  { value: 'SPOTIFY', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/...', icon: '🎧' },
-]
+// --- CONSTANTS ---
 
 const MAX_IMAGES = 3
-
-// --- HELPER FONKSİYONLAR ---
+const SOCIAL_PLATFORMS: { value: SocialPlatform; label: string; icon: string }[] = [
+  { value: 'INSTAGRAM', label: 'Instagram', icon: '📷' },
+  { value: 'TWITTER', label: 'Twitter / X', icon: '𝕏' },
+  { value: 'YOUTUBE', label: 'YouTube', icon: '▶️' },
+  { value: 'TIKTOK', label: 'TikTok', icon: '🎵' },
+  { value: 'FACEBOOK', label: 'Facebook', icon: '👤' },
+  { value: 'LINKEDIN', label: 'LinkedIn', icon: '💼' },
+  { value: 'WEBSITE', label: 'Website', icon: '🌐' },
+  { value: 'IMDB', label: 'IMDb', icon: '🎬' },
+  { value: 'SPOTIFY', label: 'Spotify', icon: '🎧' },
+]
 
 const generateId = () => Math.random().toString(36).substring(2, 9)
 
-/**
- * URL'i güvenli hale getirir ve API rotasına yönlendirir.
- * http ile başlıyorsa dokunmaz, aksi halde /uploads/ rotasına hazırlar.
- */
 const getSafeUrl = (url: string | null | undefined): string => {
   if (!url) return ''
   if (url.startsWith('http') || url.startsWith('data:')) return url
-  
-  // URL başındaki slash'i temizle ve tekrar ekle (garanti olsun)
-  const cleanPath = url.startsWith('/') ? url : `/${url}`
-  return cleanPath
+  return url.startsWith('/') ? url : `/${url}`
 }
 
-// --- COMPONENT ---
+const getInitialTranslation = (code: string): TranslationData => ({
+  name: '', nickname: '', profession: '', slug: '',
+  birthPlace: '', nationality: '', zodiac: '', bio: '', altText: '',
+  faqs: []
+})
 
-export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFormProps) {
+// --- MAIN COMPONENT ---
+
+export default function CelebrityForm({ celebrity, isEdit }: CelebrityFormProps) {
   const router = useRouter()
+  const t = useTranslations('admin.form')
   const { addToast } = useToast()
 
-  const [formData, setFormData] = useState({
-    name: celebrity?.name || '',
-    nickname: celebrity?.nickname || '',
-    profession: celebrity?.profession || '',
-    birthDate: celebrity?.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
-    birthPlace: celebrity?.birthPlace || '',
-    nationality: celebrity?.nationality || '',
-    bio: celebrity?.bio || '',
-    categoryIds: celebrity?.categories?.map(c => c.id) || []
-  })
-
-  // Social Links state
-  const [socialLinks, setSocialLinks] = useState<SocialLinkFormItem[]>(() => {
-    if (celebrity?.socialMediaLinks && celebrity.socialMediaLinks.length > 0) {
-      return celebrity.socialMediaLinks.map(link => ({
-        id: generateId(),
-        platform: link.platform,
-        url: link.url
-      }))
-    }
-    return []
-  })
-
-  // Multi-image state initialization
-  const [images, setImages] = useState<ImageFormItem[]>(() => {
-    // 1. Yeni sistemdeki resimleri kontrol et
-    if (celebrity?.images && celebrity.images.length > 0) {
-      return celebrity.images.map((img, index) => {
-        const safeUrl = getSafeUrl(img.url)
-        return {
-          id: generateId(),
-          url: safeUrl,
-          file: null,
-          preview: safeUrl,
-          isMain: img.isMain || index === 0,
-          isUploading: false,
-          error: false
-        }
-      })
-    }
-    
-    // 2. Eski sistemdeki tekil resmi kontrol et
-    if (celebrity?.image) {
-      const safeUrl = getSafeUrl(celebrity.image)
-      return [{
-        id: generateId(),
-        url: safeUrl,
-        file: null,
-        preview: safeUrl,
-        isMain: true,
-        isUploading: false,
-        error: false
-      }]
-    }
-    return []
-  })
-
-  // FAQ state
-  const [faqs, setFaqs] = useState<FAQFormItem[]>(() => {
-    if (celebrity?.faqs && celebrity.faqs.length > 0) {
-      return celebrity.faqs.map(faq => ({
-        id: generateId(),
-        question: faq.question,
-        answer: faq.answer
-      }))
-    }
-    return []
-  })
-
-  const [categories, setCategories] = useState<Category[]>([])
-  const [errors, setErrors] = useState<{[key: string]: string}>({})
-  const [socialLinkErrors, setSocialLinkErrors] = useState<{[key: string]: string}>({})
-  const [faqErrors, setFaqErrors] = useState<{[key: string]: string}>({})
+  const [activeLang, setActiveLang] = useState<Language>('EN')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Load categories
+  // Determine initial shared values
+  const getInitialShared = (): SharedState => {
+    if (celebrity) {
+      const en = celebrity.translations?.find((t: any) => t.language === 'EN')
+      if (en) return { name: en.name, birthPlace: en.birthPlace, nationality: en.nationality }
+
+      if (celebrity.name) return { name: celebrity.name, birthPlace: celebrity.birthPlace || '', nationality: celebrity.nationality || '' }
+
+      const anyT = celebrity.translations?.[0]
+      if (anyT) return { name: anyT.name, birthPlace: anyT.birthPlace, nationality: anyT.nationality }
+    }
+    return { name: '', birthPlace: '', nationality: '' }
+  }
+
+  const [formState, setFormState] = useState<FormState>(() => {
+    const initialTranslations: Partial<Record<Language, TranslationData>> = {}
+
+    // Initialize translations from prop or empty
+    LANGUAGES.forEach(lang => {
+      let data = getInitialTranslation(lang.code)
+
+      if (celebrity?.translations) {
+        const found = celebrity.translations.find((t: any) => t.language === lang.code)
+        if (found) {
+          data = { ...data, ...found }
+        }
+        data.faqs = [] // Initial empty FAQs, will be populated by useEffect
+      }
+      initialTranslations[lang.code] = data
+    })
+
+    return {
+      common: {
+        birthDate: celebrity?.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
+        gender: celebrity?.gender || '',
+        categoryIds: celebrity?.categories?.map((c: any) => c.id) || [],
+        images: (celebrity?.images || []).map((img: any, idx: number) => ({
+          id: generateId(),
+          url: getSafeUrl(img.url),
+          file: null,
+          preview: getSafeUrl(img.url),
+          isMain: img.isMain,
+          isUploading: false,
+          error: false
+        }))
+      },
+      shared: getInitialShared(),
+      translations: initialTranslations as Record<Language, TranslationData>
+    }
+  })
+
+  // Sync state with props when celebrity changes (Fix for Edit Mode - Reactive State)
+  useEffect(() => {
+    if (!celebrity) return
+
+    // 1. Calculate Shared State
+    const enTranslation = celebrity.translations?.find((t: any) => t.language === 'EN')
+    const sharedName = enTranslation?.name || celebrity.name || ''
+    const sharedBirthPlace = enTranslation?.birthPlace || celebrity.birthPlace || ''
+    const sharedNationality = enTranslation?.nationality || celebrity.nationality || ''
+
+    const newShared = {
+      name: sharedName,
+      birthPlace: sharedBirthPlace,
+      nationality: sharedNationality
+    }
+
+    // 2. Prepare Translations
+    const newTranslations: Partial<Record<Language, TranslationData>> = {}
+
+    LANGUAGES.forEach(lang => {
+      // Start with empty defaults
+      let data = getInitialTranslation(lang.code)
+
+      // Merge with existing translation if found
+      const found = celebrity.translations?.find((t: any) => t.language === lang.code)
+      if (found) {
+        data = { ...data, ...found }
+      }
+
+      // Populate FAQs from Root Array (filtered by language)
+      if (celebrity.faqs && Array.isArray(celebrity.faqs)) {
+        const langFaqs = celebrity.faqs.filter((f: any) =>
+          (f.language === lang.code) || (!f.language && lang.code === 'EN') // Handle legacy/default EN
+        )
+
+        data.faqs = langFaqs.map((f: any) => ({
+          id: generateId(), // Always generate new ID for UI handling
+          question: f.question,
+          answer: f.answer
+        }))
+      }
+
+      // Enforce Shared Fields
+      data.name = newShared.name
+      data.birthPlace = newShared.birthPlace
+      data.nationality = newShared.nationality
+
+      newTranslations[lang.code] = data
+    })
+
+    // 3. Fallback for Explicit EN Creation (if missing in DB)
+    if (!newTranslations['EN']?.slug && celebrity.slug) {
+      newTranslations['EN'] = {
+        ...newTranslations['EN']!,
+        slug: celebrity.slug,
+        bio: celebrity.bio || '',
+        name: celebrity.name
+      }
+    }
+
+    // 4. Update Form State
+    setFormState(prev => ({
+      common: {
+        ...prev.common,
+        birthDate: celebrity.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
+        gender: celebrity.gender || '',
+        categoryIds: celebrity.categories?.map((c: any) => c.id) || [],
+        images: (celebrity.images || []).map((img: any) => ({
+          id: generateId(),
+          url: getSafeUrl(img.url),
+          file: null,
+          preview: getSafeUrl(img.url),
+          isMain: img.isMain,
+          isUploading: false,
+          error: false
+        }))
+      },
+      shared: newShared,
+      translations: newTranslations as Record<Language, TranslationData>
+    }))
+
+    // 5. Update Standalone States
+    setSocialLinks(celebrity.socialMediaLinks?.map((l: any) => ({
+      id: generateId(), platform: l.platform, url: l.url
+    })) || [])
+
+  }, [celebrity]) // Re-run when celebrity prop updates
+
+  // Sync Shared State to all translations on init/change
+  useEffect(() => {
+    setFormState(prev => {
+      const nextTranslations = { ...prev.translations }
+      LANGUAGES.forEach(lang => {
+        nextTranslations[lang.code] = {
+          ...nextTranslations[lang.code],
+          name: prev.shared.name,
+          birthPlace: prev.shared.birthPlace,
+          nationality: prev.shared.nationality
+        }
+      })
+      return { ...prev, translations: nextTranslations }
+    })
+  }, [formState.shared.name, formState.shared.birthPlace, formState.shared.nationality])
+
+
+  const [socialLinks, setSocialLinks] = useState<SocialLinkInput[]>(() =>
+    celebrity?.socialMediaLinks?.map((l: any) => ({
+      id: generateId(), platform: l.platform, url: l.url
+    })) || []
+  )
+
+  const [categories, setCategories] = useState<Category[]>([])
+
   useEffect(() => {
     async function loadCategories() {
       const result = await getCategories()
@@ -199,812 +326,509 @@ export default function CelebrityForm({ celebrity, isEdit = false }: CelebrityFo
     loadCategories()
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }))
-    }
-  }
+  // --- HANDLERS ---
 
-  const handleCategoryToggle = (categoryId: string) => {
-    setFormData(prev => ({
+  const handleCommonChange = (field: keyof CommonData, value: any) => {
+    setFormState(prev => ({
       ...prev,
-      categoryIds: prev.categoryIds.includes(categoryId)
-        ? prev.categoryIds.filter(id => id !== categoryId)
-        : [...prev.categoryIds, categoryId]
+      common: { ...prev.common, [field]: value }
     }))
   }
 
-  // ========== Image Handlers ==========
+  const handleSharedChange = (field: keyof SharedState, value: string) => {
+    setFormState(prev => {
+      const nextTranslations = { ...prev.translations }
+      // Propagate to ALL languages
+      LANGUAGES.forEach(lang => {
+        nextTranslations[lang.code] = {
+          ...nextTranslations[lang.code],
+          [field]: value
+        }
+      })
+      return {
+        ...prev,
+        shared: { ...prev.shared, [field]: value },
+        translations: nextTranslations
+      }
+    })
+  }
 
-  const handleAddImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTranslationChange = (field: string, value: any) => {
+    setFormState(prev => ({
+      ...prev,
+      translations: {
+        ...prev.translations,
+        [activeLang]: {
+          ...prev.translations[activeLang],
+          [field]: value
+        }
+      }
+    }))
+  }
+
+  // FAQ Handlers
+  const handleAddFaq = () => {
+    const newFaq: FAQInput = { id: generateId(), question: '', answer: '' }
+    const currentFaqs = formState.translations[activeLang].faqs || []
+    handleTranslationChange('faqs', [...currentFaqs, newFaq])
+  }
+
+  const handleRemoveFaq = (id: string) => {
+    const currentFaqs = formState.translations[activeLang].faqs || []
+    handleTranslationChange('faqs', currentFaqs.filter(f => f.id !== id))
+  }
+
+  const handleFaqChange = (id: string, field: 'question' | 'answer', value: string) => {
+    const currentFaqs = formState.translations[activeLang].faqs || []
+    const updatedFaqs = currentFaqs.map(f => f.id === id ? { ...f, [field]: value } : f)
+    handleTranslationChange('faqs', updatedFaqs)
+  }
+
+  const handleCategoryToggle = (id: string) => {
+    const current = formState.common.categoryIds
+    const next = current.includes(id)
+      ? current.filter(c => c !== id)
+      : [...current, id]
+    handleCommonChange('categoryIds', next)
+  }
+
+  const handleAddImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (images.length >= MAX_IMAGES) {
-      addToast(`Maksimum ${MAX_IMAGES} resim ekleyebilirsiniz`, 'error')
-      return
-    }
-
-    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
-      addToast('Sadece JPG, PNG ve WEBP formatları desteklenir', 'error')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      addToast('Dosya boyutu maksimum 5MB olabilir', 'error')
-      return
-    }
-
+    if (formState.common.images.length >= MAX_IMAGES) return
     const reader = new FileReader()
     reader.onloadend = () => {
-      const newImage: ImageFormItem = {
-        id: generateId(),
-        url: '',
-        file,
-        preview: reader.result as string,
-        isMain: images.length === 0,
-        isUploading: false,
-        error: false
+      const newImg: ImageInput = {
+        id: generateId(), url: '', file, preview: reader.result as string,
+        isMain: formState.common.images.length === 0, isUploading: false, error: false
       }
-      setImages(prev => [...prev, newImage])
+      setFormState(prev => ({
+        ...prev, common: { ...prev.common, images: [...prev.common.images, newImg] }
+      }))
     }
     reader.readAsDataURL(file)
-    e.target.value = ''
-  }, [images.length, addToast])
+  }
 
-  const handleRemoveImage = useCallback((imageId: string) => {
-    setImages(prev => {
-      const filtered = prev.filter(img => img.id !== imageId)
-      if (filtered.length > 0 && !filtered.some(img => img.isMain)) {
-        filtered[0].isMain = true
+  const handleRemoveImage = (id: string) => {
+    setFormState(prev => {
+      const filtered = prev.common.images.filter(i => i.id !== id)
+      if (filtered.length > 0 && !filtered.some(i => i.isMain)) filtered[0].isMain = true
+      return { ...prev, common: { ...prev.common, images: filtered } }
+    })
+  }
+
+  // Helper: Sanitize Payload (Convert empty strings to undefined/null)
+  const sanitizePayload = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj
+    if (typeof obj === 'string') return obj.trim() === '' ? undefined : obj.trim()
+    if (Array.isArray(obj)) return obj.map(sanitizePayload)
+    if (typeof obj === 'object') {
+      const newObj: any = {}
+      for (const key in obj) {
+        newObj[key] = sanitizePayload(obj[key])
       }
-      return filtered
-    })
-  }, [])
-
-  const handleSetMainImage = useCallback((imageId: string) => {
-    setImages(prev =>
-      prev.map(img => ({
-        ...img,
-        isMain: img.id === imageId
-      }))
-    )
-  }, [])
-
-  // ========== Social Media Handlers ==========
-
-  const handleAddSocialLink = () => {
-    setSocialLinks(prev => [...prev, { id: generateId(), platform: '', url: '' }])
-  }
-
-  const handleRemoveSocialLink = (id: string) => {
-    setSocialLinks(prev => prev.filter(link => link.id !== id))
-    setSocialLinkErrors(prev => {
-      const newErrors = { ...prev }
-      delete newErrors[`${id}-platform`]
-      delete newErrors[`${id}-url`]
-      return newErrors
-    })
-  }
-
-  const handleSocialPlatformChange = (id: string, platform: SocialPlatform | '') => {
-    setSocialLinks(prev =>
-      prev.map(link => (link.id === id ? { ...link, platform } : link))
-    )
-    if (platform && socialLinkErrors[`${id}-platform`]) {
-      setSocialLinkErrors(prev => ({ ...prev, [`${id}-platform`]: '' }))
+      return newObj
     }
+    return obj
   }
 
-  const handleSocialUrlChange = (id: string, url: string) => {
-    setSocialLinks(prev =>
-      prev.map(link => (link.id === id ? { ...link, url } : link))
+  // Helper: Dynamic Input Renderer
+  const renderInput = (field: FieldConfig, lang: Language) => {
+    const value = formState.translations[lang][field.key] || ''
+
+    if (field.type === 'select' && field.options) {
+      return (
+        <select
+          value={value}
+          onChange={(e) => handleTranslationChange(field.key, e.target.value)}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+        >
+          <option value="">{t('select')}</option>
+          {field.options.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      )
+    }
+
+    if (field.type === 'textarea') {
+      return (
+        <textarea
+          value={value}
+          onChange={(e) => handleTranslationChange(field.key, e.target.value)}
+          rows={field.rows || 4}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+          placeholder={t(`fields.${field.key}`)}
+        />
+      )
+    }
+
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => handleTranslationChange(field.key, e.target.value)}
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+        placeholder={t(`fields.${field.key}`)}
+      />
     )
-    if (url && socialLinkErrors[`${id}-url`]) {
-      setSocialLinkErrors(prev => ({ ...prev, [`${id}-url`]: '' }))
-    }
   }
-
-  const getPlaceholderForPlatform = (platform: SocialPlatform | ''): string => {
-    if (!platform) return 'Önce platform seçin...'
-    const config = SOCIAL_PLATFORMS.find(p => p.value === platform)
-    return config?.placeholder || 'URL girin'
-  }
-
-  // ========== FAQ Handlers ==========
-
-  const handleAddFAQ = () => {
-    setFaqs(prev => [...prev, { id: generateId(), question: '', answer: '' }])
-  }
-
-  const handleRemoveFAQ = (id: string) => {
-    setFaqs(prev => prev.filter(faq => faq.id !== id))
-    setFaqErrors(prev => {
-      const newErrors = { ...prev }
-      delete newErrors[`${id}-question`]
-      delete newErrors[`${id}-answer`]
-      return newErrors
-    })
-  }
-
-  const handleFAQChange = (id: string, field: 'question' | 'answer', value: string) => {
-    setFaqs(prev =>
-      prev.map(faq => (faq.id === id ? { ...faq, [field]: value } : faq))
-    )
-    if (value && faqErrors[`${id}-${field}`]) {
-      setFaqErrors(prev => ({ ...prev, [`${id}-${field}`]: '' }))
-    }
-  }
-
-  // ========== Validations ==========
-
-  const isValidUrl = (url: string): boolean => {
-    try {
-      new URL(url)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  const validateSocialLinks = (): boolean => {
-    const newErrors: {[key: string]: string} = {}
-    let isValid = true
-
-    socialLinks.forEach(link => {
-      if (!link.platform) {
-        newErrors[`${link.id}-platform`] = 'Platform seçin'
-        isValid = false
-      }
-      if (!link.url.trim()) {
-        newErrors[`${link.id}-url`] = 'URL boş bırakılamaz'
-        isValid = false
-      } else if (!isValidUrl(link.url)) {
-        newErrors[`${link.id}-url`] = 'Geçerli bir URL girin'
-        isValid = false
-      }
-    })
-
-    setSocialLinkErrors(newErrors)
-    return isValid
-  }
-
-  const validateFAQs = (): boolean => {
-    const newErrors: {[key: string]: string} = {}
-    let isValid = true
-
-    faqs.forEach(faq => {
-      if (faq.question.trim() || faq.answer.trim()) {
-        if (!faq.question.trim()) {
-          newErrors[`${faq.id}-question`] = 'Soru boş bırakılamaz'
-          isValid = false
-        }
-        if (!faq.answer.trim()) {
-          newErrors[`${faq.id}-answer`] = 'Cevap boş bırakılamaz'
-          isValid = false
-        }
-      }
-    })
-
-    setFaqErrors(newErrors)
-    return isValid
-  }
-
-  // ========== Form Submit ==========
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const mainImageUrl = images.length > 0 ? (images[0].url || images[0].preview) : ''
-
-    const validationErrors = validateCelebrityForm({
-      ...formData,
-      image: mainImageUrl
-    })
-
-    const socialLinksValid = validateSocialLinks()
-    const faqsValid = validateFAQs()
-
-    if (validationErrors.length > 0 || !socialLinksValid || !faqsValid) {
-      const errorMap = validationErrors.reduce((acc, error) => {
-        acc[error.field] = error.message
-        return acc
-      }, {} as {[key: string]: string})
-
-      setErrors(errorMap)
-      addToast('Lütfen hataları düzeltin', 'error')
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
-      // 1. Yeni resimleri yükle
-      const uploadedImages: { url: string; isMain: boolean; displayOrder: number }[] = []
-
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i]
-
+      // 1. Upload Images
+      const uploadedImages = []
+      for (const img of formState.common.images) {
         if (img.file) {
-          // Dosya varsa yükle
-          setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: true } : x)))
-
-          const uploadFormData = new FormData()
-          uploadFormData.append('file', img.file)
-
-          const uploadResult = await uploadImage(uploadFormData)
-
-          if (!uploadResult.success) {
-            setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: false, error: true } : x)))
-            throw new Error(uploadResult.error || 'Resim yüklenemedi')
-          }
-
-          const finalPath = getSafeUrl(uploadResult.imagePath)
-
+          const fd = new FormData()
+          fd.append('file', img.file)
+          const res = await uploadImage(fd)
+          if (!res.success) throw new Error('Image upload failed')
           uploadedImages.push({
-            url: finalPath,
+            url: getSafeUrl(res.imagePath),
             isMain: img.isMain,
-            displayOrder: i
+            displayOrder: uploadedImages.length
           })
-
-          setImages(prev => prev.map(x => (x.id === img.id ? { ...x, isUploading: false, url: finalPath } : x)))
-        } else if (img.url) {
-          // Var olan resim
+        } else {
           uploadedImages.push({
-            url: getSafeUrl(img.url),
+            url: img.url,
             isMain: img.isMain,
-            displayOrder: i
+            displayOrder: uploadedImages.length
           })
         }
       }
 
-      // 2. Sosyal medya verilerini hazırla
-      const validSocialLinks = socialLinks
-        .filter(link => link.platform && link.url.trim())
-        .map((link, index) => ({
-          platform: link.platform as SocialPlatform,
-          url: link.url.trim(),
-          displayOrder: index
-        }))
+      // 2. Prepare Payload (STRICT CLEANING)
+      const cleanTranslations: Record<string, any> = {};
+      Object.entries(formState.translations).forEach(([key, data]) => {
+        // Ensure we only send languages that actually have data (and at least a name)
+        // Name comes from shared state, so check shared name primarily.
+        if (formState.shared.name?.trim()) {
+          cleanTranslations[key.toUpperCase()] = {
+            ...data,
+            faqs: data.faqs // Ensure FAQs are included
+          }
+        }
+      });
 
-      // 3. FAQ verilerini hazırla
-      const validFaqs = faqs
-        .filter(faq => faq.question.trim() && faq.answer.trim())
-        .map((faq, index) => ({
-          question: faq.question.trim(),
-          answer: faq.answer.trim(),
-          displayOrder: index
-        }))
+      // Fix BirthDate empty string issue
+      const finalBirthDate = formState.common.birthDate === '' ? null : formState.common.birthDate
 
-      // 4. Veriyi birleştir
-      const celebrityData = {
-        name: formData.name,
-        nickname: formData.nickname,
-        profession: formData.profession,
-        birthDate: formData.birthDate,
-        birthPlace: formData.birthPlace,
-        nationality: formData.nationality,
-        bio: formData.bio,
-        image: uploadedImages.length > 0 ? uploadedImages[0].url : '',
-        categoryIds: formData.categoryIds,
-        socialLinks: validSocialLinks,
-        images: uploadedImages,
-        faqs: validFaqs
+      const rawPayload = {
+        common: {
+          ...formState.common,
+          birthDate: finalBirthDate,
+          images: uploadedImages,
+          socialLinks,
+          // faqs removed from common
+        },
+        translations: cleanTranslations // Send cleaned translations
       }
 
-      // 5. Sunucuya gönder
+      // 3. Sanitize Payload (Convert "" -> undefined)
+      const payload = sanitizePayload(rawPayload)
+      console.log('Submitting Payload:', payload)
+
       let result
-      if (isEdit && celebrity) {
-        result = await updateCelebrity(celebrity.id, celebrityData)
+      if (isEdit && celebrity?.id) {
+        result = await updateCelebrity(celebrity.id, payload)
       } else {
-        result = await createCelebrity(celebrityData)
+        result = await createCelebrity(payload)
       }
 
       if (!result.success) {
-        throw new Error(result.error || 'İşlem başarısız')
+        if (result.details) {
+          console.dir(result.details, { depth: null }) // Log deep details on client too
+          throw new Error(t('error_validation'))
+        }
+        throw new Error(result.error)
       }
 
-      addToast(
-        isEdit ? 'Ünlü başarıyla güncellendi!' : 'Ünlü başarıyla eklendi!',
-        'success'
-      )
-
-      // 6. Yönlendirme (Router Cache'i temizleyerek)
+      addToast(isEdit ? t('success_update') : t('success'), 'success')
       router.refresh()
-      
-      // Race condition önlemek için kısa gecikme
-      setTimeout(() => {
-        router.push('/admin')
-      }, 150)
-      
-    } catch (error) {
-      console.error('Form submission error:', error)
-      addToast(error instanceof Error ? error.message : 'Bir hata oluştu', 'error')
+      router.push('/admin')
+
+    } catch (err: any) {
+      console.error(err)
+      addToast(err.message || t('error'), 'error')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        {isEdit ? 'Ünlü Düzenle' : 'Yeni Ünlü Ekle'}
-      </h2>
+    <div className="bg-white rounded-lg shadow-lg">
+      <div className="border-b px-8 py-6 flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {isEdit ? t('title_edit') : t('title_new')}
+        </h2>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* İsim */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            İsim Soyisim *
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.name ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Örn: Kemal Sunal"
-            required
-          />
-          {errors.name && (
-            <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-          )}
-        </div>
+      <form onSubmit={handleSubmit} className="p-8 space-y-8">
 
-        {/* Takma Ad */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Takma Ad / Lakap
-          </label>
-          <input
-            type="text"
-            name="nickname"
-            value={formData.nickname}
-            onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.nickname ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Örn: Turist Ömer"
-          />
-        </div>
-
-        {/* Meslek */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Meslek
-          </label>
-          <input
-            type="text"
-            name="profession"
-            value={formData.profession}
-            onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.profession ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Örn: Oyuncu, Yönetmen"
-          />
-        </div>
-
-        {/* Uyruk */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Uyruk / Vatandaşlık
-          </label>
-          <select
-            name="nationality"
-            value={formData.nationality}
-            onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.nationality ? 'border-red-500' : 'border-gray-300'
-            }`}
-          >
-            <option value="">Seçiniz...</option>
-            {getAllCountries().map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.flag} {country.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Kategoriler */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Kategoriler
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {categories.map((category) => (
-              <label
-                key={category.id}
-                className={`flex items-center px-4 py-3 border rounded-lg cursor-pointer transition-colors min-h-[44px] ${
-                  formData.categoryIds.includes(category.id)
-                    ? 'bg-blue-50 border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={formData.categoryIds.includes(category.id)}
-                  onChange={() => handleCategoryToggle(category.id)}
-                  className="mr-2"
-                />
-                <span className="text-sm">{category.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Doğum Bilgileri */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Doğum Tarihi
-            </label>
-            <input
-              type="date"
-              name="birthDate"
-              value={formData.birthDate}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Doğum Yeri
-            </label>
-            <input
-              type="text"
-              name="birthPlace"
-              value={formData.birthPlace}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Örn: İstanbul, Türkiye"
-            />
-          </div>
-        </div>
-
-        {/* ========== Multi-Image Upload ========== */}
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Fotoğraflar (Maks. {MAX_IMAGES})
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                İlk fotoğraf ana resim olarak kullanılır. Maksimum 5MB, JPG/PNG/WEBP
-              </p>
+        {/* === SHARED / GLOBAL INFO SECTION === */}
+        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            🌍 Primary Information (Shared across all languages)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Name */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('fields.name')} <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={formState.shared.name}
+                onChange={(e) => handleSharedChange('name', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                placeholder="Full Name (John Doe)"
+              />
+              <p className="text-xs text-gray-500 mt-1">This name will be used for all languages.</p>
             </div>
-            {images.length < MAX_IMAGES && (
-              <label className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors min-h-[44px] cursor-pointer">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Fotoğraf Ekle
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/jpg,image/webp"
-                  onChange={handleAddImage}
-                  className="hidden"
-                />
-              </label>
-            )}
+
+            {/* Birth Place */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('fields.birthPlace')}</label>
+              <input
+                type="text"
+                value={formState.shared.birthPlace}
+                onChange={(e) => handleSharedChange('birthPlace', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                placeholder="e.g. New York, USA"
+              />
+            </div>
+
+            {/* Nationality (Dropdown) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('fields.nationality')}</label>
+              <select
+                value={formState.shared.nationality}
+                onChange={(e) => handleSharedChange('nationality', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">{t('select')}</option>
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Birth Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('birth_date')}</label>
+              <input
+                type="date"
+                value={formState.common.birthDate}
+                onChange={(e) => handleCommonChange('birthDate', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Zodiac: Calculated Automatically</p>
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('gender')}</label>
+              <select
+                value={formState.common.gender}
+                onChange={(e) => handleCommonChange('gender', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">{t('select')}</option>
+                <option value="MALE">{t('male')}</option>
+                <option value="FEMALE">{t('female')}</option>
+                <option value="OTHER">{t('other')}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* === LANGUAGE SPECIFIC SECTION === */}
+        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 transition-all duration-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-blue-800 flex items-center gap-2">
+              <span>{LANGUAGES.find(l => l.code === activeLang)?.flag}</span>
+              <span>{LANGUAGES.find(l => l.code === activeLang)?.label}</span>
+              <span>{t('language_specific_details')}</span>
+            </h3>
+
+            {/* Language Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-blue-800">Editing:</span>
+              <select
+                value={activeLang}
+                onChange={(e) => setActiveLang(e.target.value as Language)}
+                className="bg-white border-blue-300 text-blue-900 text-sm rounded-md focus:ring-blue-500 block p-2 cursor-pointer"
+              >
+                {LANGUAGES.map(lang => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.flag} {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Image Thumbnails */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {images.map((img, index) => (
-              <div
-                key={img.id}
-                className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 ${
-                  img.isMain ? 'border-blue-500' : 'border-gray-200'
-                } ${img.error ? 'border-red-500' : ''}`}
-              >
-                {/* Image Preview & Display */}
-                {img.error ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400">
-                    <span className="text-4xl mb-2">📷</span>
-                    <span className="text-xs text-center px-2">Yüklenemedi</span>
-                  </div>
-                ) : (
-                  <Image
-                    src={img.preview}
-                    alt={`Fotoğraf ${index + 1}`}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    unoptimized={true} // ✅ Titremeyi ve sunucu yükünü engeller
-                    onError={() => {
-                      // Sonsuz döngüyü engelle: Sadece hata yoksa state güncelle
-                      setImages(prev =>
-                        prev.map(x => (x.id === img.id && !x.error ? { ...x, error: true } : x))
-                      )
-                    }}
-                  />
-                )}
-
-                {/* Loading Overlay */}
-                {img.isUploading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                  </div>
-                )}
-
-                {/* Main Badge */}
-                {img.isMain && (
-                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded z-10 shadow-sm">
-                    Ana Resim
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="absolute top-2 right-2 flex gap-1 z-10">
-                  {!img.isMain && (
-                    <button
-                      type="button"
-                      onClick={() => handleSetMainImage(img.id)}
-                      className="w-8 h-8 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/90 rounded-full hover:bg-white shadow transition-colors"
-                      title="Ana resim yap"
-                    >
-                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(img.id)}
-                    className="w-8 h-8 min-w-[44px] min-h-[44px] flex items-center justify-center bg-red-500/90 rounded-full hover:bg-red-600 shadow transition-colors"
-                    title="Sil"
-                  >
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+          <div className="grid gap-6">
+            {LANGUAGE_SPECIFIC_FIELDS.map(field => (
+              <div key={field.key}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t(`fields.${field.key}`)}
+                  {field.required && <span className="text-red-500">*</span>}
+                </label>
+                {renderInput(field, activeLang)}
               </div>
             ))}
-
-            {/* Empty State */}
-            {images.length === 0 && (
-              <label className="aspect-[3/4] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-colors col-span-2 sm:col-span-3">
-                <svg className="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-sm text-gray-500">Fotoğraf eklemek için tıklayın</span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/jpg,image/webp"
-                  onChange={handleAddImage}
-                  className="hidden"
-                />
-              </label>
-            )}
           </div>
 
-          {images.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
-              {images.length}/{MAX_IMAGES} fotoğraf eklendi
-            </p>
-          )}
-        </div>
-
-        {/* Biyografi */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Biyografi
-          </label>
-          <textarea
-            name="bio"
-            value={formData.bio}
-            onChange={handleChange}
-            rows={8}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.bio ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Ünlü hakkında bilgi yazın..."
-          />
-          <p className="mt-1 text-sm text-gray-500">
-            {formData.bio?.length || 0}/5000 karakter
-          </p>
-        </div>
-
-        {/* ========== FAQ Management ========== */}
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Sıkça Sorulan Sorular (SSS)
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Google zengin sonuçları için SSS ekleyin
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleAddFAQ}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors min-h-[44px]"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Soru Ekle
-            </button>
-          </div>
-
-          {/* FAQ Items */}
-          <div className="space-y-4">
-            {faqs.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-6 bg-gray-50 rounded-lg">
-                Henüz soru eklenmedi. SSS ekleyerek Google zengin sonuçlarında görünürlüğü artırabilirsiniz.
-              </p>
-            ) : (
-              faqs.map((faq, index) => (
-                <div key={faq.id} className="p-4 bg-gray-50 rounded-lg space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-sm font-medium text-gray-500">Soru {index + 1}</span>
+          {/* FAQs (Localized) */}
+          <div className="mt-8 pt-6 border-t border-blue-200">
+            <label className="block text-lg font-medium text-blue-900 mb-4">{t('faqs')} ({activeLang})</label>
+            <div className="space-y-4">
+              {(formState.translations[activeLang].faqs || []).map((faq, index) => (
+                <div key={faq.id} className="p-4 bg-white rounded-lg border border-blue-100 space-y-3 shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <h4 className="text-sm font-medium text-gray-500">FAQ #{index + 1}</h4>
                     <button
                       type="button"
-                      onClick={() => handleRemoveFAQ(faq.id)}
-                      className="text-red-600 hover:text-red-700 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      title="Bu soruyu sil"
+                      onClick={() => handleRemoveFaq(faq.id)}
+                      className="text-red-500 hover:text-red-700 text-xs font-medium"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      Delete
                     </button>
                   </div>
-
-                  <div>
-                    <input
-                      type="text"
-                      value={faq.question}
-                      onChange={(e) => handleFAQChange(faq.id, 'question', e.target.value)}
-                      placeholder="Soru girin (Örn: Kemal Sunal ne zaman doğdu?)"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        faqErrors[`${faq.id}-question`] ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {faqErrors[`${faq.id}-question`] && (
-                      <p className="mt-1 text-xs text-red-600">{faqErrors[`${faq.id}-question`]}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <textarea
-                      value={faq.answer}
-                      onChange={(e) => handleFAQChange(faq.id, 'answer', e.target.value)}
-                      placeholder="Cevabı yazın..."
-                      rows={3}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        faqErrors[`${faq.id}-answer`] ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {faqErrors[`${faq.id}-answer`] && (
-                      <p className="mt-1 text-xs text-red-600">{faqErrors[`${faq.id}-answer`]}</p>
-                    )}
-                  </div>
+                  <input
+                    type="text"
+                    value={faq.question}
+                    onChange={(e) => handleFaqChange(faq.id, 'question', e.target.value)}
+                    placeholder="Question"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                  <textarea
+                    value={faq.answer}
+                    onChange={(e) => handleFaqChange(faq.id, 'answer', e.target.value)}
+                    placeholder="Answer"
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
                 </div>
-              ))
-            )}
+              ))}
+              <button
+                type="button"
+                onClick={handleAddFaq}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              >
+                + Add FAQ ({activeLang})
+              </button>
+            </div>
           </div>
-
-          {faqs.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
-              {faqs.filter(f => f.question.trim() && f.answer.trim()).length} geçerli soru eklendi
-            </p>
-          )}
         </div>
 
-        {/* ========== Sosyal Medya Hesapları ========== */}
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Sosyal Medya Hesapları
-            </label>
+        {/* Categories */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('categories')}</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {categories.map(cat => (
+              <label key={cat.id} className={`flex items-center px-4 py-3 border rounded-lg cursor-pointer transition-colors ${formState.common.categoryIds.includes(cat.id) ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50'
+                }`}>
+                <input
+                  type="checkbox"
+                  checked={formState.common.categoryIds.includes(cat.id)}
+                  onChange={() => handleCategoryToggle(cat.id)}
+                  className="mr-2"
+                />
+                <span className="text-sm">{cat.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Image Upload */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('photos')}</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {formState.common.images.map((img) => (
+              <div key={img.id} className="relative aspect-[3/4] group">
+                <Image src={img.preview} alt="preview" fill className="object-cover rounded-lg" />
+                <button type="button" onClick={() => handleRemoveImage(img.id)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                  X
+                </button>
+                {img.isMain && <span className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-md">Main</span>}
+              </div>
+            ))}
+            {formState.common.images.length < MAX_IMAGES && (
+              <label className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 aspect-[3/4] transition-colors">
+                <span className="text-3xl text-gray-400 mb-2">+</span>
+                <span className="text-sm text-gray-600 font-medium">{t('add_photo')}</span>
+                <input type="file" onChange={handleAddImage} className="hidden" accept="image/*" />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* Social Media Links */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Social Media</label>
+          <div className="space-y-3">
+            {socialLinks.map((link, index) => (
+              <div key={link.id} className="flex flex-col md:flex-row gap-3">
+                <select
+                  value={link.platform}
+                  onChange={(e) => {
+                    const newLinks = [...socialLinks]
+                    newLinks[index].platform = e.target.value as SocialPlatform
+                    setSocialLinks(newLinks)
+                  }}
+                  className="w-full md:w-1/3 px-4 py-2 border rounded-lg bg-gray-50"
+                >
+                  <option value="">Select Platform</option>
+                  {SOCIAL_PLATFORMS.map(p => (
+                    <option key={p.value} value={p.value}>{p.icon} {p.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={link.url}
+                  onChange={(e) => {
+                    const newLinks = [...socialLinks]
+                    newLinks[index].url = e.target.value
+                    setSocialLinks(newLinks)
+                  }}
+                  placeholder="Profile URL"
+                  className="flex-1 px-4 py-2 border rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSocialLinks(prev => prev.filter(l => l.id !== link.id))}
+                  className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg border border-red-200"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
             <button
               type="button"
-              onClick={handleAddSocialLink}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors min-h-[44px]"
+              onClick={() => setSocialLinks(prev => [...prev, { id: generateId(), platform: '', url: '' }])}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-2"
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Hesap Ekle
+              + Add Social Link
             </button>
-          </div>
-
-          {/* Sosyal Medya Satırları */}
-          <div className="space-y-4">
-            {socialLinks.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
-                Henüz sosyal medya hesabı eklenmedi.
-              </p>
-            ) : (
-              socialLinks.map((link) => (
-                <div key={link.id} className="flex flex-col sm:flex-row gap-3 p-4 bg-gray-50 rounded-lg">
-                  {/* Platform Select */}
-                  <div className="flex-shrink-0 w-full sm:w-48">
-                    <select
-                      value={link.platform}
-                      onChange={(e) => handleSocialPlatformChange(link.id, e.target.value as SocialPlatform | '')}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-h-[44px] ${
-                        socialLinkErrors[`${link.id}-platform`] ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    >
-                      <option value="">Platform Seçin</option>
-                      {SOCIAL_PLATFORMS.map((platform) => (
-                        <option key={platform.value} value={platform.value}>
-                          {platform.icon} {platform.label}
-                        </option>
-                      ))}
-                    </select>
-                    {socialLinkErrors[`${link.id}-platform`] && (
-                      <p className="mt-1 text-xs text-red-600">{socialLinkErrors[`${link.id}-platform`]}</p>
-                    )}
-                  </div>
-
-                  {/* URL Input */}
-                  <div className="flex-grow">
-                    <input
-                      type="url"
-                      value={link.url}
-                      onChange={(e) => handleSocialUrlChange(link.id, e.target.value)}
-                      placeholder={getPlaceholderForPlatform(link.platform)}
-                      disabled={!link.platform}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] ${
-                        socialLinkErrors[`${link.id}-url`] ? 'border-red-500' : 'border-gray-300'
-                      } ${!link.platform ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
-                    />
-                    {socialLinkErrors[`${link.id}-url`] && (
-                      <p className="mt-1 text-xs text-red-600">{socialLinkErrors[`${link.id}-url`]}</p>
-                    )}
-                  </div>
-
-                  {/* Delete Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveSocialLink(link.id)}
-                    className="flex-shrink-0 inline-flex items-center justify-center w-full sm:w-12 h-12 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors min-h-[44px]"
-                    title="Bu hesabı sil"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    <span className="sm:hidden ml-2">Sil</span>
-                  </button>
-                </div>
-              ))
-            )}
           </div>
         </div>
 
-        {/* Butonlar */}
-        <div className="flex justify-end space-x-4 pt-6 border-t">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors min-h-[44px]"
-          >
-            İptal
+        <div className="pt-6 border-t border-gray-200 flex justify-end gap-3 sticky bottom-0 bg-white p-4 shadow-top z-10">
+          <button type="button" onClick={() => router.back()} className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+            {t('cancel')}
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 shadow-lg"
           >
-            {isSubmitting ? (
-              <span className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                {isEdit ? 'Güncelleniyor...' : 'Ekleniyor...'}
-              </span>
-            ) : (
-              isEdit ? 'Güncelle' : 'Ekle'
-            )}
+            {isSubmitting ? t('saving') : (isEdit ? t('update') : t('save'))}
           </button>
         </div>
       </form>

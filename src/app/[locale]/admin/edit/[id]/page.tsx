@@ -8,6 +8,7 @@ async function getCelebrity(id: string) {
     const celebrity = await prisma.celebrity.findUnique({
       where: { id },
       include: {
+        translations: true, // Explicitly fetch translations
         categories: {
           select: {
             id: true,
@@ -17,11 +18,9 @@ async function getCelebrity(id: string) {
         socialMediaLinks: {
           orderBy: { displayOrder: 'asc' }
         },
-        // ✅ EKLENEN: Resimleri çek
         images: {
           orderBy: { displayOrder: 'asc' }
         },
-        // ✅ EKLENEN: SSS'leri çek
         faqs: {
           orderBy: { displayOrder: 'asc' }
         }
@@ -34,19 +33,20 @@ async function getCelebrity(id: string) {
   }
 }
 
-// DÜZELTME: params artık Promise<{ id: string }> tipinde
 export default async function EditCelebrityPage({
   params
 }: {
   params: Promise<{ id: string }>
 }) {
-  // DÜZELTME: params await edilerek id alınıyor
   const { id } = await params
   const celebrity = await getCelebrity(id)
 
   if (!celebrity) {
     notFound()
   }
+
+  // Debug log to verify translations are present
+  console.log(`[EditPage] Fetched celebrity ${id}. Translations count: ${celebrity.translations?.length}`)
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">

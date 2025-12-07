@@ -1,0 +1,113 @@
+{
+    "common": {
+        "back": "Back",
+        "home": "Home",
+        "search": "Search",
+        "cancel": "Cancel",
+        "save": "Save",
+        "copyright": "© {year} CelebHub. All rights reserved.",
+        "loading": "Loading...",
+        "active_filters": "Active filters",
+        "category": "Category",
+        "nationality": "Nationality",
+        "search_label": "Search",
+        "search_btn": "Search",
+        "clear_search": "Clear Search"
+    },
+    "nav": {
+        "home": "Home",
+        "admin": "Admin",
+        "switch_language": "Switch Language"
+    },
+    "auth": {
+        "login_title": "CelebHub Admin Login",
+        "email": "Email Address",
+        "password": "Password",
+        "login_btn": "Sign In",
+        "logging_in": "Signing in..."
+    },
+    "celebrity": {
+        "born": "Born",
+        "born_place": "Birth Place",
+        "age": "{age} years old",
+        "age_simple": "years old",
+        "zodiac": "Zodiac",
+        "nationality": "Nationality",
+        "biography": "Biography",
+        "no_bio_title": "Biography Not Added Yet",
+        "no_bio_desc": "Biography has not been added for this celebrity yet. You can add it from the admin panel.",
+        "profession_unknown": "Profession unknown",
+        "report_error": "Report Error",
+        "zodiac_signs": {
+            "capricorn": "Capricorn",
+            "aquarius": "Aquarius",
+            "pisces": "Pisces",
+            "aries": "Aries",
+            "taurus": "Taurus",
+            "gemini": "Gemini",
+            "cancer": "Cancer",
+            "leo": "Leo",
+            "virgo": "Virgo",
+            "libra": "Libra",
+            "scorpio": "Scorpio",
+            "sagittarius": "Sagittarius"
+        }
+    },
+    "admin": {
+        "filters": {
+            "search_placeholder": "Search name or profession...",
+            "all_categories": "All Categories",
+            "all_nationalities": "All Nationalities",
+            "data_quality": "Data Quality",
+            "data_issues": "Data Issues",
+            "no_bio": "No Biography",
+            "no_image": "No Image",
+            "pending_reports": "Pending Reports",
+            "no_faqs": "No FAQs",
+            "clear": "Clear Filters"
+        },
+        "form": {
+            "title_new": "Add New Celebrity",
+            "title_edit": "Edit Celebrity",
+            "general_info": "General Information (All Languages)",
+            "birth_date": "Birth Date",
+            "gender": "Gender",
+            "select": "Select...",
+            "faqs": "Frequently Asked Questions",
+            "add_faq": "Add FAQ",
+            "question": "Question",
+            "answer": "Answer",
+            "language_specific_details": "Specific Details",
+            "male": "Male",
+            "female": "Female",
+            "other": "Other",
+            "categories": "Categories",
+            "photos": "Photos",
+            "add_photo": "+ Add",
+            "translation_title": "{lang} Translation",
+            "cancel": "Cancel",
+            "save": "Save",
+            "update": "Update",
+            "saving": "Saving...",
+            "success": "Operation successful",
+            "success_update": "Update successful!",
+            "error": "Error occurred",
+            "error_validation": "Form validation failed. Please check the fields.",
+            "fields": {
+                "name": "Name Surname",
+                "nickname": "Nickname",
+                "profession": "Profession",
+                "slug": "URL Slug (Optional)",
+                "birthPlace": "Birth Place",
+                "nationality": "Nationality (Text)",
+                "zodiac": "Zodiac",
+                "altText": "Image Alt Text (SEO)",
+                "bio": "Biography"
+            }
+        }
+    },
+    "search": {
+        "placeholder": "Search celebrity (e.g. Actor, Singer...)",
+        "all": "All"
+    }
+}

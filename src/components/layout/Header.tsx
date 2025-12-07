@@ -1,8 +1,10 @@
-"use client"
-
-import Link from 'next/link'
+import { Link } from '@/i18n/routing'
+import { useTranslations } from 'next-intl'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 
 export default function Header() {
+  const t = useTranslations('nav')
+
   return (
     <header className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -20,14 +22,17 @@ export default function Header() {
               href="/"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
             >
-              Ana Sayfa
+              {t('home')}
             </Link>
             <Link
               href="/admin"
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
             >
-              Admin
+              {t('admin')}
             </Link>
+            <div className="border-l pl-4 ml-4">
+              <LanguageSwitcher />
+            </div>
           </nav>
         </div>
       </div>

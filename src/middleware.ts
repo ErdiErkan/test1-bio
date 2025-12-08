@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 import NextAuth from 'next-auth';
@@ -18,15 +17,51 @@ export default auth((req) => {
   if (isAdminPath) {
     // If user is not logged in
     if (!req.auth) {
-      const loginUrl = new URL('/login', req.nextUrl.origin);
-      // Preserve the return URL
-      loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+      // --- DÜZELTME BAŞLANGICI ---
+      
+      // 1. Mevcut dili URL'den tespit etmeye çalış
+      const segments = pathname.split('/');
+      const maybeLocale = segments[1]; // Örneğin: /tr/admin -> 'tr', /admin -> 'admin'
+      
+      // Eğer URL'deki ilk kısım geçerli bir dil ise onu kullan, değilse varsayılan dili (en) kullan
+      const locale = routing.locales.includes(maybeLocale as any) 
+        ? maybeLocale 
+        : routing.defaultLocale;
+
+      // 2. Login sayfasının o dildeki yolunu bul
+      // routing.ts dosyasındaki pathnames ayarını kontrol ediyoruz
+      // (TypeScript hatası almamak için 'any' kullanıyoruz)
+      const pathnames = (routing as any).pathnames || {};
+      const loginRouteConfig = pathnames['/login'];
+      
+      let loginPath = '/login';
+      
+      if (typeof loginRouteConfig === 'object') {
+        // Eğer dile özel path tanımlıysa onu al (Örn: tr için '/giris')
+        loginPath = loginRouteConfig[locale] || '/login';
+      } else if (typeof loginRouteConfig === 'string') {
+        loginPath = loginRouteConfig;
+      }
+
+      // 3. Doğru URL'e yönlendir: /{locale}/{loginPath}
+      // Örnek: /tr/giris veya /en/login
+      const targetUrl = `/${locale}${loginPath}`;
+      
+      const loginUrl = new URL(targetUrl, req.nextUrl.origin);
+      // Geri dönüş URL'ini de koru
+      loginUrl.searchParams.set('callbackUrl', pathname);
+      
       return NextResponse.redirect(loginUrl);
+      // --- DÜZELTME BİTİŞİ ---
     }
 
     // Optional: Role Based Access Control (RBAC)
     if ((req.auth.user as any)?.role !== 'admin') {
-      return NextResponse.redirect(new URL('/', req.nextUrl.origin));
+      // Yetkisiz ise ana sayfaya at (yine dili koruyarak)
+      const segments = pathname.split('/');
+      const maybeLocale = segments[1];
+      const locale = routing.locales.includes(maybeLocale as any) ? maybeLocale : routing.defaultLocale;
+      return NextResponse.redirect(new URL(`/${locale}`, req.nextUrl.origin));
     }
   }
 

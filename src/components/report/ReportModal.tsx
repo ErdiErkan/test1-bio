@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import ReportForm from './ReportForm'
+import { useTranslations } from 'next-intl' // ✅ Eklendi
 
 interface ReportModalProps {
   isOpen: boolean
@@ -16,25 +17,22 @@ export default function ReportModal({
   celebrityId,
   celebrityName
 }: ReportModalProps) {
+  const t = useTranslations('report') // ✅ Hook
   const modalRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
-  // Store previous focus and focus modal when opened
   useEffect(() => {
     if (isOpen) {
       previousFocusRef.current = document.activeElement as HTMLElement
-      // Focus first focusable element in modal
       const firstInput = modalRef.current?.querySelector('input, textarea, button, select')
       if (firstInput instanceof HTMLElement) {
         setTimeout(() => firstInput.focus(), 100)
       }
     } else {
-      // Restore focus when closed
       previousFocusRef.current?.focus()
     }
   }, [isOpen])
 
-  // Handle escape key
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose()
@@ -44,7 +42,6 @@ export default function ReportModal({
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown)
-      // Prevent body scroll
       document.body.style.overflow = 'hidden'
     }
     return () => {
@@ -53,7 +50,6 @@ export default function ReportModal({
     }
   }, [isOpen, handleKeyDown])
 
-  // Handle backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose()
@@ -78,7 +74,7 @@ export default function ReportModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 id="report-modal-title" className="text-lg font-semibold text-gray-900">
-            Hata Bildir
+            {t('title')} {/* ✅ Dinamik Başlık */}
           </h2>
           <button
             onClick={onClose}
@@ -94,7 +90,11 @@ export default function ReportModal({
         {/* Content */}
         <div className="p-4">
           <p className="text-sm text-gray-600 mb-4">
-            <strong>{celebrityName}</strong> hakkında bir hata mı buldunuz? Lütfen aşağıdaki formu doldurun.
+            {/* ✅ Dinamik Açıklama (Rich Text) */}
+            {t.rich('description', {
+              name: celebrityName,
+              strong: (chunks) => <strong>{chunks}</strong>
+            })}
           </p>
           <ReportForm celebrityId={celebrityId} onSuccess={onClose} />
         </div>

@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation'
 import CelebrityProfile from '@/components/celebrity/CelebrityProfile'
 import { getCelebrityBySlug } from '@/actions/celebrities'
-import { getCelebrityDescription } from '@/lib/celebrity'
-import { generateStructuredDataScript } from '@/lib/seo' // FIX: Updated import
+import { generateStructuredDataScript } from '@/lib/seo'
 import type { Metadata } from 'next'
+import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,14 +21,33 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug, locale } = await params
   const celebrity = await getCelebrityBySlug(slug, locale)
 
+  // Çevirileri sunucudan alıyoruz (gerekirse kullanmak için)
+  const tCommon = await getTranslations({ locale, namespace: 'common' });
+  
   if (!celebrity) {
     return {
-      title: 'Ünlü Bulunamadı - CelebHub',
-      description: 'Aradığınız ünlü bulunamadı.'
+      title: locale === 'tr' ? 'Ünlü Bulunamadı - CelebHub' : 'Celebrity Not Found - CelebHub',
+      description: locale === 'tr' ? 'Aradığınız ünlü bulunamadı.' : 'The celebrity you are looking for was not found.'
     }
   }
 
-  const description = getCelebrityDescription(celebrity, 160)
+  // Dinamik Description Oluşturma
+  let description = '';
+  if (celebrity.bio) {
+    // Bio varsa onu kullan, çok uzunsa kısalt
+    description = celebrity.bio.length > 160 ? celebrity.bio.substring(0, 160) + '...' : celebrity.bio;
+  } else {
+    // Bio yoksa otomatik bir açıklama oluştur
+    const parts = [];
+    if (celebrity.profession) parts.push(celebrity.profession);
+    if (celebrity.birthPlace) parts.push(celebrity.birthPlace);
+    
+    if (locale === 'tr') {
+      description = `${celebrity.name} hakkında bilgi edinin. ${parts.join(', ')}.`;
+    } else {
+      description = `Learn about ${celebrity.name}. ${parts.join(', ')}.`;
+    }
+  }
 
   // Type-safe image check
   const mainImage = celebrity.images && celebrity.images.length > 0
@@ -36,10 +55,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     : celebrity.image
 
   const altText = celebrity.altText || celebrity.name
-
-  const languages: Record<string, string> = {}
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'
 
+  const languages: Record<string, string> = {}
   if (celebrity.translations && Array.isArray(celebrity.translations)) {
     celebrity.translations.forEach((t: Translation) => {
       const langCode = t.language.toLowerCase()
@@ -51,11 +69,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     languages[locale] = `${siteUrl}/${locale}/celebrity/${celebrity.slug}`
   }
 
+  // Dinamik Title (Dile göre başlık)
+  const title = locale === 'tr' 
+    ? `${celebrity.name} Biyografisi, Hayatı ve Kariyeri - CelebHub`
+    : `${celebrity.name} Biography, Life and Career - CelebHub`;
+
+  const ogTitle = locale === 'tr' ? `${celebrity.name} Kimdir?` : `Who is ${celebrity.name}?`;
+
   return {
-    title: `${celebrity.name} Biyografisi, Hayatı ve Kariyeri - CelebHub`,
+    title: title,
     description: description,
     openGraph: {
-      title: `${celebrity.name} Kimdir? - Biyografisi ve Hayatı`,
+      title: ogTitle,
       description: description,
       images: mainImage ? [{
         url: mainImage,
@@ -87,7 +112,6 @@ export default async function CelebrityPage({ params }: PageProps) {
     notFound()
   }
 
-  // FIX: Using the more robust script generator with locale
   const structuredData = generateStructuredDataScript(celebrity, locale)
 
   return (

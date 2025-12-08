@@ -145,7 +145,10 @@ export default function AdvancedSearch({ categories }: AdvancedSearchProps) {
             {suggestions.map((celebrity) => (
               <Link
                 key={celebrity.id}
-                href={`/celebrity/${celebrity.slug}`}
+                href={{
+                  pathname: '/celebrity/[slug]',
+                  params: { slug: celebrity.slug }
+                }}
                 onClick={() => {
                   setShowSuggestions(false)
                   setQuery('')

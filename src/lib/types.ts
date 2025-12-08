@@ -1,3 +1,5 @@
+import { Language } from '@prisma/client'
+
 // Category type
 export interface Category {
   id: string
@@ -36,6 +38,30 @@ export interface SocialMediaLinkInput {
   platform: SocialPlatform
   url: string
   displayOrder?: number
+}
+
+// Report Status type - mirrors Prisma enum
+export type ReportStatus = 'PENDING' | 'IN_REVIEW' | 'RESOLVED' | 'REJECTED'
+
+// Report Type type - mirrors Prisma enum
+export type ReportType = 'WRONG_INFO' | 'TYPO' | 'IMAGE_ISSUE' | 'OTHER'
+
+// Report type
+export interface Report {
+  id: string
+  celebrityId: string
+  celebrity?: Celebrity
+  type: ReportType
+  message: string
+  contactEmail?: string | null
+  status: ReportStatus
+  
+  // ✅ Dil Desteği
+  language: Language
+  
+  ipAddress?: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 // Celebrity Image type (multi-image carousel support)
@@ -155,26 +181,6 @@ export interface SearchParams {
   search?: string
   page?: number
   limit?: number
-}
-
-// Report Status type - mirrors Prisma enum
-export type ReportStatus = 'PENDING' | 'IN_REVIEW' | 'RESOLVED' | 'REJECTED'
-
-// Report Type type - mirrors Prisma enum
-export type ReportType = 'WRONG_INFO' | 'TYPO' | 'IMAGE_ISSUE' | 'OTHER'
-
-// Report type
-export interface Report {
-  id: string
-  celebrityId: string
-  celebrity?: Celebrity
-  type: ReportType
-  message: string
-  contactEmail?: string | null
-  status: ReportStatus
-  ipAddress?: string | null
-  createdAt: Date
-  updatedAt: Date
 }
 
 // Report form input type

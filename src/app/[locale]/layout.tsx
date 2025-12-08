@@ -11,7 +11,11 @@ import Footer from '@/components/layout/Footer'
 // Global CSS import yolunu düzeltiyoruz (bir üst klasöre çıktığı için ../)
 import '../globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',       // Font yüklenene kadar sistem fontunu gösterir
+  adjustFontFallback: false // Preload sorunlarını azaltır
+})
 
 export const viewport: Viewport = {
   width: 'device-width',

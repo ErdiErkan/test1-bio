@@ -1,17 +1,19 @@
-import {getRequestConfig} from 'next-intl/server';
-import {routing} from './routing';
+import { getRequestConfig } from 'next-intl/server';
+import { routing } from './routing';
 
-export default getRequestConfig(async ({requestLocale}) => {
-  // This typically corresponds to the `[locale]` segment
+export default getRequestConfig(async ({ requestLocale }) => {
+  // `requestLocale` artık bir Promise döndürüyor (Next.js 15+)
   let locale = await requestLocale;
 
-  // Ensure that a valid locale is used
+  // Geçerli bir locale değilse varsayılanı kullan
   if (!locale || !routing.locales.includes(locale as any)) {
     locale = routing.defaultLocale;
   }
 
   return {
     locale,
+    // JSON dosyalarının yolu "messages/en.json" ise "../../../messages" yerine "../../messages" olmalı.
+    // Dosya yapınıza göre bu yolu kontrol edin: src/i18n/request.ts -> ../../messages
     messages: (await import(`../../messages/${locale}.json`)).default
   };
 });

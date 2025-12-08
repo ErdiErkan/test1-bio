@@ -28,15 +28,16 @@ const FAQInputSchema = z.object({
 
 const TranslationSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  bio: z.string().optional().or(z.literal('')),
-  profession: z.string().optional().or(z.literal('')),
-  slug: z.string().optional().or(z.literal('')),
-  nickname: z.string().optional().or(z.literal('')),
-  birthPlace: z.string().optional().or(z.literal('')),
-  nationality: z.string().optional().or(z.literal('')),
-  zodiac: z.string().optional().or(z.literal('')),
-  altText: z.string().optional().or(z.literal('')),
-  faqs: z.array(FAQInputSchema).optional() // Localized FAQs
+  // .nullable() ekleyerek null değerlerin geçmesine izin veriyoruz
+  bio: z.string().nullable().optional().or(z.literal('')),
+  profession: z.string().nullable().optional().or(z.literal('')),
+  slug: z.string().nullable().optional().or(z.literal('')),
+  nickname: z.string().nullable().optional().or(z.literal('')),
+  birthPlace: z.string().nullable().optional().or(z.literal('')),
+  nationality: z.string().nullable().optional().or(z.literal('')),
+  zodiac: z.string().nullable().optional().or(z.literal('')),
+  altText: z.string().nullable().optional().or(z.literal('')),
+  faqs: z.array(FAQInputSchema).optional()
 })
 
 const CelebritySchema = z.object({

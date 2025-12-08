@@ -4,6 +4,8 @@ import AdvancedSearch from '@/components/search/AdvancedSearch'
 import CelebrityGrid from '@/components/home/CelebrityGrid'
 import { prisma } from '@/lib/db'
 import { Metadata } from 'next'
+import { getCategories } from '@/actions/categories'
+import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,13 @@ interface SearchParamsProps {
   zodiac?: string
 }
 
+// Kategori nesnesi için tip tanımı
+interface Category {
+  id: string
+  name: string
+  slug: string
+}
+
 async function getCelebrities({ search, categorySlug, nationality, birthYear, zodiac }: SearchParamsProps) {
   try {
     const where: any = {}
@@ -30,7 +39,19 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { profession: { contains: search, mode: 'insensitive' } },
-        { bio: { contains: search, mode: 'insensitive' } }
+        { bio: { contains: search, mode: 'insensitive' } },
+        // Çevirilerde de ara
+        {
+          translations: {
+            some: {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { profession: { contains: search, mode: 'insensitive' } },
+                { bio: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          }
+        }
       ]
     }
 
@@ -38,19 +59,32 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
     if (categorySlug) {
       where.categories = {
         some: {
-          slug: categorySlug
+          OR: [
+            { slug: categorySlug }, // Ana tablo
+            { 
+              translations: { 
+                some: { slug: categorySlug } // Çeviri tablosu
+              } 
+            }
+          ]
         }
       }
     }
 
     // 3. Uyruk Filtresi
     if (nationality) {
-      where.nationality = nationality
+      where.OR = [
+        { nationality: nationality },
+        { translations: { some: { nationality: nationality } } }
+      ]
     }
 
-    // 4. Burç Filtresi (Veritabanına 'zodiac' alanı eklendiyse)
+    // 4. Burç Filtresi
     if (zodiac) {
-      where.zodiac = zodiac
+      where.OR = [
+        { zodiac: zodiac },
+        { translations: { some: { zodiac: zodiac } } }
+      ]
     }
 
     // 5. Doğum Yılı Filtresi
@@ -71,41 +105,18 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
       where,
       orderBy: { createdAt: 'desc' },
       take: 12,
-      select: {
-        id: true,
-        name: true,
-        profession: true,
-        birthDate: true,
-        image: true,
-        slug: true,
-        // zodiac: true, // İsterseniz burç bilgisini de çekebilirsiniz
+      include: {
         images: {
           where: { isMain: true },
           take: 1,
           select: { url: true }
-        }
+        },
+        translations: true 
       }
     })
     return celebrities
   } catch (error) {
     console.error('Database error fetching celebrities:', error)
-    return []
-  }
-}
-
-async function getCategories() {
-  try {
-    const categories = await prisma.category.findMany({
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-      }
-    })
-    return categories
-  } catch (error) {
-    console.error('Database error fetching categories:', error)
     return []
   }
 }
@@ -123,16 +134,34 @@ function LoadingGrid() {
   )
 }
 
-// Wrapper bileşeni: Parametreleri alır ve başlığı dinamik ayarlar
+function mapCelebrityForCard(celebrity: any, locale: string) {
+  const lang = locale.toUpperCase();
+  const t = celebrity.translations?.find((t: any) => t.language === lang) || 
+            celebrity.translations?.find((t: any) => t.language === 'EN') || 
+            celebrity.translations?.[0];
+
+  return {
+    id: celebrity.id,
+    name: t?.name || celebrity.name,
+    profession: t?.profession || celebrity.profession,
+    birthDate: celebrity.birthDate,
+    image: celebrity.images?.[0]?.url || celebrity.image,
+    slug: t?.slug || celebrity.slug
+  }
+}
+
+// Wrapper bileşeni
 async function CelebritiesWrapper({ 
   search, 
   category, 
   nationality, 
   birthYear,
-  zodiac 
-}: SearchParamsProps & { category?: string }) {
+  zodiac,
+  locale,
+  categories // ✅ Kategoriler listesi prop olarak alındı
+}: SearchParamsProps & { category?: string, locale: string, categories: Category[] }) {
   
-  const celebrities = await getCelebrities({ 
+  const rawCelebrities = await getCelebrities({ 
     search, 
     categorySlug: category, 
     nationality, 
@@ -140,30 +169,52 @@ async function CelebritiesWrapper({
     zodiac 
   })
 
-  // Başlık mantığı
-  let title = "Son Eklenen Ünlüler"
+  const celebrities = rawCelebrities.map(c => mapCelebrityForCard(c, locale));
+
+  // ✅ Çevirileri sunucudan alıyoruz
+  const tCommon = await getTranslations('common');
+  const tCelebrity = await getTranslations('celebrity');
+
+  // Başlık mantığı (Dinamik ve Çevirili)
+  let title = locale === 'tr' ? "Son Eklenen Ünlüler" : "Latest Added Celebrities";
   
-  if (search) title = `"${search}" için sonuçlar`
-  else if (category) title = `Kategori: ${category}`
-  else if (nationality) title = `Uyruk: ${nationality}`
-  else if (birthYear) title = `Doğum Yılı: ${birthYear}`
-  else if (zodiac) title = `Burç: ${zodiac.charAt(0).toUpperCase() + zodiac.slice(1)}`
+  if (search) {
+    title = locale === 'tr' ? `"${search}" için sonuçlar` : `Results for "${search}"`;
+  }
+  else if (category) {
+    // Slug'a karşılık gelen kategori ismini bul (Doğru dil için)
+    const catObj = categories.find(c => c.slug === category);
+    const catName = catObj ? catObj.name : (category.charAt(0).toUpperCase() + category.slice(1));
+    
+    // "Kategori: X" formatını yerelleştir
+    title = `${tCommon('category')}: ${catName}`;
+  }
+  else if (nationality) {
+    title = `${tCommon('nationality')}: ${nationality}`;
+  }
+  else if (birthYear) {
+    title = locale === 'tr' ? `Doğum Yılı: ${birthYear}` : `Birth Year: ${birthYear}`;
+  }
+  else if (zodiac) {
+    const zodiacName = zodiac.charAt(0).toUpperCase() + zodiac.slice(1);
+    title = `${tCelebrity('zodiac')}: ${zodiacName}`;
+  }
 
   if (celebrities.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🔍</div>
         <h2 className="text-2xl font-bold text-gray-700 mb-2">
-          Sonuç Bulunamadı
+          {locale === 'tr' ? "Sonuç Bulunamadı" : "No Results Found"}
         </h2>
         <p className="text-gray-500 mb-6">
-          Aradığınız kriterlere uygun ünlü bulunamadı.
+          {locale === 'tr' ? "Aradığınız kriterlere uygun ünlü bulunamadı." : "No celebrities found matching your criteria."}
         </p>
         <Link
           href="/"
           className="inline-block bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors"
         >
-          Tüm Ünlüleri Görüntüle
+          {locale === 'tr' ? "Tüm Ünlüleri Görüntüle" : "View All Celebrities"}
         </Link>
       </div>
     )
@@ -174,6 +225,7 @@ async function CelebritiesWrapper({
 
 // Sayfa Props Tanımı
 interface HomePageProps {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<{ 
     q?: string; 
     category?: string;
@@ -183,17 +235,19 @@ interface HomePageProps {
   }>
 }
 
-export default async function HomePage({ searchParams }: HomePageProps) {
-  const params = await searchParams
+export default async function HomePage({ params, searchParams }: HomePageProps) {
+  const { locale } = await params;
+  const queryParams = await searchParams;
   
-  // URL parametrelerini alıyoruz
-  const search = params?.q
-  const category = params?.category
-  const nationality = params?.nationality
-  const birthYear = params?.birthYear
-  const zodiac = params?.zodiac
+  const search = queryParams?.q
+  const category = queryParams?.category
+  const nationality = queryParams?.nationality
+  const birthYear = queryParams?.birthYear
+  const zodiac = queryParams?.zodiac
 
-  const categories = await getCategories()
+  // ✅ Kategorileri dil desteği ile çekiyoruz
+  const categoriesResult = await getCategories(locale);
+  const categories = categoriesResult.success ? (categoriesResult.data || []) : [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -201,10 +255,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
-              Ünlü Biyografilerini Keşfet
+              {locale === 'tr' ? "Ünlü Biyografilerini Keşfet" : "Discover Celebrity Biographies"}
             </h1>
             <p className="text-xl text-blue-100">
-              Favori ünlülerinin hayat hikayelerini öğren
+              {locale === 'tr' ? "Favori ünlülerinin hayat hikayelerini öğren" : "Learn about your favorite celebrities' lives"}
             </p>
           </div>
 
@@ -222,6 +276,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             nationality={nationality}
             birthYear={birthYear}
             zodiac={zodiac}
+            locale={locale}
+            categories={categories} // ✅ Kategorileri iletiyoruz
           />
         </Suspense>
       </section>

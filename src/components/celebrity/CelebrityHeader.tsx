@@ -4,9 +4,9 @@ import { Link } from '@/i18n/routing'
 import { calculateZodiac, getCountryInfo } from '@/lib/celebrity'
 import type { SocialPlatform, CelebrityImage } from '@/lib/types'
 import ImageCarousel from './ImageCarousel'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 
-// Sosyal medya platform konfigürasyonu - SVG ikonlar ve hover renkleri
+// Sosyal medya platform konfigürasyonu
 const SOCIAL_PLATFORM_CONFIG: Record<
   SocialPlatform,
   { icon: React.ReactNode; hoverClass: string; label: string }
@@ -96,6 +96,22 @@ const SOCIAL_PLATFORM_CONFIG: Record<
   }
 }
 
+// Burç Tarihleri için İngilizce Çeviri Haritası
+const ZODIAC_DATES_EN: Record<string, string> = {
+  capricorn: 'Dec 22 - Jan 19',
+  aquarius: 'Jan 20 - Feb 18',
+  pisces: 'Feb 19 - Mar 20',
+  aries: 'Mar 21 - Apr 19',
+  taurus: 'Apr 20 - May 20',
+  gemini: 'May 21 - Jun 20',
+  cancer: 'Jun 21 - Jul 22',
+  leo: 'Jul 23 - Aug 22',
+  virgo: 'Aug 23 - Sep 22',
+  libra: 'Sep 23 - Oct 22',
+  scorpio: 'Oct 23 - Nov 21',
+  sagittarius: 'Nov 22 - Dec 21'
+}
+
 interface SocialMediaLink {
   id: string
   platform: SocialPlatform
@@ -124,10 +140,12 @@ interface CelebrityHeaderProps {
 
 export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
   const t = useTranslations('celebrity')
+  const locale = useLocale() // Aktif dili alıyoruz
 
   const formatDate = (dateString?: Date | string | null) => {
     if (!dateString) return null
-    return new Date(dateString).toLocaleDateString('tr-TR', {
+    // Locale'e göre tarih formatı
+    return new Date(dateString).toLocaleDateString(locale === 'tr' ? 'tr-TR' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -151,6 +169,22 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
   const age = calculateAge(celebrity.birthDate)
   const zodiac = calculateZodiac(celebrity.birthDate)
   const country = getCountryInfo(celebrity.nationality)
+
+  // Ülke İsmi Çevirisi (Intl.DisplayNames ile)
+  let displayCountryName = country?.name
+  if (celebrity.nationality && typeof Intl !== 'undefined' && Intl.DisplayNames) {
+    try {
+      const regionNames = new Intl.DisplayNames([locale], { type: 'region' })
+      displayCountryName = regionNames.of(celebrity.nationality)
+    } catch (e) {
+      // Hata durumunda varsayılan ismi (Türkçe) kullan
+    }
+  }
+
+  // Burç Tarihi Çevirisi
+  const displayZodiacDate = (locale !== 'tr' && zodiac && ZODIAC_DATES_EN[zodiac.sign]) 
+    ? ZODIAC_DATES_EN[zodiac.sign] 
+    : zodiac?.dateRange;
 
   const birthDate = celebrity.birthDate ? new Date(celebrity.birthDate) : null
   const birthYear = birthDate?.getFullYear()
@@ -246,7 +280,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
                       {t(`zodiac_signs.${zodiac.sign}`)}
                     </Link>
                   </div>
-                  <div className="text-sm text-gray-500">{zodiac.dateRange}</div>
+                  <div className="text-sm text-gray-500">{displayZodiacDate}</div>
                 </div>
               </div>
             )}
@@ -261,7 +295,7 @@ export default function CelebrityHeader({ celebrity }: CelebrityHeaderProps) {
                       href={{ pathname: '/', query: { nationality: country.code } }}
                       className="hover:text-blue-600 hover:underline transition-colors"
                     >
-                      {country.name}
+                      {displayCountryName}
                     </Link>
                   </div>
                 </div>

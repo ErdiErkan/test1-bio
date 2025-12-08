@@ -267,12 +267,16 @@ model Report {
   message      String       @db.VarChar(1000)
   contactEmail String?      @db.VarChar(255)
   status       ReportStatus @default(PENDING)
+
+  language     Language     @default(EN)
+
   ipAddress    String?      @db.VarChar(45)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([celebrityId])
   @@index([status])
+  @@index([language])
   @@index([createdAt(sort: Desc)])
   @@map("reports")
 }

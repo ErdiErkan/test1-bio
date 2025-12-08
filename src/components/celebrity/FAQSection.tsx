@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import type { FAQ } from '@/lib/types'
+import { useTranslations } from 'next-intl'
 
 interface FAQSectionProps {
   faqs: FAQ[]
@@ -90,7 +91,7 @@ function FAQItem({ faq, isOpen, onToggle, index }: FAQItemProps) {
 
 export default function FAQSection({ faqs, celebrityName }: FAQSectionProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(0) // First one open by default
-
+  const t = useTranslations('celebrity')
   const handleToggle = useCallback((index: number) => {
     setOpenIndex(prev => (prev === index ? null : index))
   }, [])
@@ -117,10 +118,10 @@ export default function FAQSection({ faqs, celebrityName }: FAQSectionProps) {
           className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2"
         >
           <span className="text-2xl">❓</span>
-          Sıkça Sorulan Sorular
+          {t('faq_title')}
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          {celebrityName} hakkında merak edilenler
+          {t('faq_subtitle', { name: celebrityName })}
         </p>
       </div>
 

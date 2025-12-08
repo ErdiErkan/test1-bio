@@ -5,19 +5,13 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getCategories } from '@/actions/categories'
 import { getUniqueNationalities } from '@/actions/celebrities'
 import type { DataQualityFilter } from '@/lib/types'
+import { useTranslations } from 'next-intl'
 
 interface Category {
   id: string
   name: string
   slug: string
 }
-
-const DATA_QUALITY_OPTIONS: { value: DataQualityFilter; label: string; icon: string }[] = [
-  { value: 'no_bio', label: 'Biyografisi Yok', icon: '📝' },
-  { value: 'no_image', label: 'Resmi Yok', icon: '🖼️' },
-  { value: 'has_pending_reports', label: 'Bekleyen Raporlar', icon: '⚠️' },
-  { value: 'no_faqs', label: "SSS'i Yok", icon: '❓' },
-]
 
 interface AdminFilterBarProps {
   onFiltersChange?: (filters: {
@@ -32,6 +26,15 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const t = useTranslations('admin.filters')
+  const tCommon = useTranslations('common')
+
+  const DATA_QUALITY_OPTIONS: { value: DataQualityFilter; label: string; icon: string }[] = [
+    { value: 'no_bio', label: t('no_bio'), icon: '📝' },
+    { value: 'no_image', label: t('no_image'), icon: '🖼️' },
+    { value: 'has_pending_reports', label: t('pending_reports'), icon: '⚠️' },
+    { value: 'no_faqs', label: t('no_faqs'), icon: '❓' },
+  ]
 
   // Initialize from URL params
   const [query, setQuery] = useState(searchParams.get('q') || '')
@@ -159,7 +162,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
         {/* Search Input */}
         <div className="flex-1">
           <label htmlFor="admin-search" className="sr-only">
-            Ara
+            {tCommon('search')}
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -172,7 +175,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="İsim veya meslek ara..."
+              placeholder={t('search_placeholder')}
               className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
             />
           </div>
@@ -181,7 +184,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
         {/* Category Filter */}
         <div className="w-full lg:w-48">
           <label htmlFor="category-filter" className="sr-only">
-            Kategori
+            {tCommon('category')}
           </label>
           <select
             id="category-filter"
@@ -190,7 +193,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
             className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] bg-white"
             disabled={isLoading}
           >
-            <option value="">Tüm Kategoriler</option>
+            <option value="">{t('all_categories')}</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.slug}>
                 {cat.name}
@@ -202,7 +205,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
         {/* Nationality Filter */}
         <div className="w-full lg:w-40">
           <label htmlFor="nationality-filter" className="sr-only">
-            Uyruk
+            {tCommon('nationality')}
           </label>
           <select
             id="nationality-filter"
@@ -211,7 +214,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
             className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] bg-white"
             disabled={isLoading}
           >
-            <option value="">Tüm Uyruklar</option>
+            <option value="">{t('all_nationalities')}</option>
             {nationalities.map((nat) => (
               <option key={nat} value={nat}>
                 {nat}
@@ -223,7 +226,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
         {/* Data Quality Filter */}
         <div className="w-full lg:w-56">
           <label htmlFor="quality-filter" className="sr-only">
-            Veri Kalitesi
+            {t('data_quality')}
           </label>
           <select
             id="quality-filter"
@@ -231,7 +234,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
             onChange={(e) => handleDataQualityChange(e.target.value as DataQualityFilter | '')}
             className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] bg-white"
           >
-            <option value="">Veri Sorunları</option>
+            <option value="">{t('data_issues')}</option>
             {DATA_QUALITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.icon} {option.label}
@@ -250,7 +253,7 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            Filtreleri Temizle
+            {t('clear')}
           </button>
         )}
       </div>
@@ -258,10 +261,10 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
       {/* Active Filters Summary */}
       {hasActiveFilters && (
         <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap gap-2">
-          <span className="text-sm text-gray-500">Aktif filtreler:</span>
+          <span className="text-sm text-gray-500">{tCommon('active_filters')}:</span>
           {query && (
             <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">
-              Arama: {query}
+              {tCommon('search_label')}: {query}
               <button
                 onClick={() => setQuery('')}
                 className="ml-1 text-blue-500 hover:text-blue-700"
@@ -274,20 +277,20 @@ export default function AdminFilterBar({ onFiltersChange }: AdminFilterBarProps)
           )}
           {category && (
             <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-              Kategori: {categories.find(c => c.slug === category)?.name || category}
+              {tCommon('category')}: {categories.find(c => c.slug === category)?.name || category}
               <button
                 onClick={() => handleCategoryChange('')}
                 className="ml-1 text-green-500 hover:text-green-700"
               >
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
             </span>
           )}
           {nationality && (
             <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded-full">
-              Uyruk: {nationality}
+              {tCommon('nationality')}: {nationality}
               <button
                 onClick={() => handleNationalityChange('')}
                 className="ml-1 text-purple-500 hover:text-purple-700"

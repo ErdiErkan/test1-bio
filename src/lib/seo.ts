@@ -16,10 +16,11 @@ function getAbsoluteImageUrl(imageUrl: string | null | undefined, siteUrl: strin
 }
 
 // Generate Person schema for the celebrity
-export function generatePersonSchema(celebrity: CelebrityWithRelations) {
+// FIX: Added 'locale' parameter
+export function generatePersonSchema(celebrity: CelebrityWithRelations, locale: string) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'
 
-  // Get image URL - prefer new images array, fallback to legacy image field
+  // Get image URL
   let imageUrl = ''
   if (celebrity.images && celebrity.images.length > 0) {
     const mainImage = celebrity.images.find(img => img.isMain) || celebrity.images[0]
@@ -28,15 +29,16 @@ export function generatePersonSchema(celebrity: CelebrityWithRelations) {
     imageUrl = getAbsoluteImageUrl(celebrity.image, siteUrl)
   }
 
-  // Get country info
   const country = getCountryInfo(celebrity.nationality)
 
-  // Build Person schema
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: celebrity.name,
-    url: `${siteUrl}/celebrity/${celebrity.slug}`,
+    // FIX: Added locale to URL
+    url: `${siteUrl}/${locale}/celebrity/${celebrity.slug}`,
+    // FIX: Added inLanguage property
+    inLanguage: locale,
 
     ...(celebrity.nickname && { alternateName: celebrity.nickname }),
     ...(celebrity.profession && { jobTitle: celebrity.profession }),
@@ -65,7 +67,6 @@ export function generatePersonSchema(celebrity: CelebrityWithRelations) {
       disambiguatingDescription: `Zodiac Sign: ${celebrity.zodiac.charAt(0).toUpperCase() + celebrity.zodiac.slice(1)}`
     }),
 
-    // Social Media Links for Google Knowledge Graph
     ...(celebrity.socialMediaLinks && celebrity.socialMediaLinks.length > 0 && {
       sameAs: celebrity.socialMediaLinks.map(link => link.url)
     })
@@ -74,7 +75,6 @@ export function generatePersonSchema(celebrity: CelebrityWithRelations) {
   return schema
 }
 
-// Generate FAQPage schema for Google Rich Snippets
 export function generateFAQSchema(faqs: FAQ[]) {
   if (!faqs || faqs.length === 0) return null
 
@@ -94,15 +94,13 @@ export function generateFAQSchema(faqs: FAQ[]) {
   return schema
 }
 
-// Generate combined schemas for a celebrity page
-export function generateCelebritySchemas(celebrity: CelebrityWithRelations) {
+// FIX: Added locale parameter here too
+export function generateCelebritySchemas(celebrity: CelebrityWithRelations, locale: string) {
   const schemas: object[] = []
 
-  // Always include Person schema
-  const personSchema = generatePersonSchema(celebrity)
+  const personSchema = generatePersonSchema(celebrity, locale)
   schemas.push(personSchema)
 
-  // Include FAQPage schema if FAQs exist
   if (celebrity.faqs && celebrity.faqs.length > 0) {
     const faqSchema = generateFAQSchema(celebrity.faqs)
     if (faqSchema) {
@@ -113,7 +111,7 @@ export function generateCelebritySchemas(celebrity: CelebrityWithRelations) {
   return schemas
 }
 
-// Generate ImageGallery schema for multiple images
+// FIX: Added locale parameter and updated ImageGallery URL
 export function generateImageGallerySchema(
   images: CelebrityImage[],
   celebrityName: string,
@@ -140,23 +138,21 @@ export function generateImageGallerySchema(
   return schema
 }
 
-// Generate all structured data scripts for a celebrity page
-export function generateStructuredDataScript(celebrity: CelebrityWithRelations): string {
-  const schemas = generateCelebritySchemas(celebrity)
+// FIX: Updated to use all corrected functions
+export function generateStructuredDataScript(celebrity: CelebrityWithRelations, locale: string): string {
+  const schemas = generateCelebritySchemas(celebrity, locale)
 
-  // Add image gallery schema if multiple images
   if (celebrity.images && celebrity.images.length > 1) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://whoo.bio'
     const gallerySchema = generateImageGallerySchema(
       celebrity.images,
       celebrity.name,
-      `${siteUrl}/celebrity/${celebrity.slug}`
+      `${siteUrl}/${locale}/celebrity/${celebrity.slug}`
     )
     if (gallerySchema) {
       schemas.push(gallerySchema)
     }
   }
 
-  // Return as JSON-LD script content
   return JSON.stringify(schemas.length === 1 ? schemas[0] : schemas)
 }

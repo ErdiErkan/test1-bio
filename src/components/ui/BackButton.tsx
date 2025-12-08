@@ -1,10 +1,12 @@
 "use client"
 
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { Link } from '@/i18n/routing'
+import { useTranslations } from 'next-intl'
 
 export default function BackButton() {
   const router = useRouter()
+  const t = useTranslations('common')
 
   return (
     <div className="flex items-center space-x-4">
@@ -13,7 +15,7 @@ export default function BackButton() {
         className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
       >
         <span className="text-xl">←</span>
-        <span>Geri</span>
+        <span>{t('back')}</span>
       </button>
 
       <span className="text-gray-300">|</span>
@@ -23,7 +25,7 @@ export default function BackButton() {
         className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
       >
         <span className="text-xl">🏠</span>
-        <span>Ana Sayfa</span>
+        <span>{t('home')}</span>
       </Link>
     </div>
   )

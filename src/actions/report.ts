@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { getLocale } from 'next-intl/server' // ✅ YENİ
+import { Language } from '@prisma/client'    // ✅ YENİ
 import type { ReportStatus, ReportType, ActionResponse, ReportWithCelebrity } from '@/lib/types'
 
 // Validation helpers
@@ -34,10 +36,9 @@ function validateReportStatus(status: string): status is ReportStatus {
  */
 export async function createReport(formData: FormData): Promise<ActionResponse> {
   try {
-    // Honeypot check - if _gotcha field is filled, silently reject
+    // Honeypot check
     const honeypot = formData.get('_gotcha') as string
     if (honeypot && honeypot.trim().length > 0) {
-      // Silently reject spam bots
       return { success: true, message: 'Geri bildiriminiz alındı. Teşekkürler!' }
     }
 
@@ -46,6 +47,16 @@ export async function createReport(formData: FormData): Promise<ActionResponse> 
     const type = formData.get('type') as string
     const message = formData.get('message') as string
     const contactEmail = formData.get('contactEmail') as string | null
+
+    // ✅ YENİ: Aktif dili al ve Enum'a çevir
+    const locale = await getLocale()
+    // Gelen locale (örn: 'tr', 'en') veritabanı enum'ına (TR, EN) çevriliyor
+    // Desteklenmeyen bir dil gelirse varsayılan olarak EN atanabilir
+    let language: Language = Language.EN
+    const upperLocale = locale.toUpperCase()
+    if (Object.values(Language).includes(upperLocale as Language)) {
+      language = upperLocale as Language
+    }
 
     // Validate celebrityId
     if (!celebrityId || celebrityId.trim().length === 0) {
@@ -86,7 +97,8 @@ export async function createReport(formData: FormData): Promise<ActionResponse> 
         type: type as ReportType,
         message: message.trim(),
         contactEmail: contactEmail?.trim() || null,
-        status: 'PENDING'
+        status: 'PENDING',
+        language: language // ✅ Dil bilgisi kaydediliyor
       }
     })
 
@@ -105,18 +117,15 @@ export async function updateReportStatus(
   status: ReportStatus
 ): Promise<ActionResponse> {
   try {
-    // Check admin authorization
     const session = await auth()
     if (!session?.user || session.user.role !== 'admin') {
       return { success: false, message: 'Yetkisiz erişim' }
     }
 
-    // Validate status
     if (!validateReportStatus(status)) {
       return { success: false, message: 'Geçersiz durum' }
     }
 
-    // Update report
     await prisma.report.update({
       where: { id },
       data: { status }
@@ -135,6 +144,7 @@ export async function updateReportStatus(
  */
 export async function getReports(options?: {
   status?: ReportStatus
+  language?: Language // ✅ Dil filtresi eklendi
   page?: number
   limit?: number
 }): Promise<{
@@ -149,7 +159,6 @@ export async function getReports(options?: {
   error?: string
 }> {
   try {
-    // Check admin authorization
     const session = await auth()
     if (!session?.user || session.user.role !== 'admin') {
       return { success: false, error: 'Yetkisiz erişim' }
@@ -160,12 +169,12 @@ export async function getReports(options?: {
     const skip = (page - 1) * limit
 
     // Build where clause
-    const where = options?.status ? { status: options.status } : {}
+    const where: any = {}
+    if (options?.status) where.status = options.status
+    if (options?.language) where.language = options.language // ✅ Filtreye eklendi
 
-    // Get total count
     const total = await prisma.report.count({ where })
 
-    // Get reports with celebrity info
     const reports = await prisma.report.findMany({
       where,
       include: {
@@ -203,7 +212,6 @@ export async function getReports(options?: {
  */
 export async function deleteReport(id: string): Promise<ActionResponse> {
   try {
-    // Check admin authorization
     const session = await auth()
     if (!session?.user || session.user.role !== 'admin') {
       return { success: false, message: 'Yetkisiz erişim' }
@@ -236,7 +244,6 @@ export async function getReportCounts(): Promise<{
   error?: string
 }> {
   try {
-    // Check admin authorization
     const session = await auth()
     if (!session?.user || session.user.role !== 'admin') {
       return { success: false, error: 'Yetkisiz erişim' }

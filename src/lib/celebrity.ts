@@ -78,7 +78,6 @@ export type ZodiacSign =
 
 export interface ZodiacInfo {
   sign: ZodiacSign
-  nameTR: string
   symbol: string
   dateRange: string
 }
@@ -91,18 +90,18 @@ export function calculateZodiac(birthDate: string | Date | null | undefined): Zo
   const day = date.getDate()
 
   const zodiacSigns: ZodiacInfo[] = [
-    { sign: 'capricorn', nameTR: 'Oğlak', symbol: '♑', dateRange: '22 Aralık - 19 Ocak' },
-    { sign: 'aquarius', nameTR: 'Kova', symbol: '♒', dateRange: '20 Ocak - 18 Şubat' },
-    { sign: 'pisces', nameTR: 'Balık', symbol: '♓', dateRange: '19 Şubat - 20 Mart' },
-    { sign: 'aries', nameTR: 'Koç', symbol: '♈', dateRange: '21 Mart - 19 Nisan' },
-    { sign: 'taurus', nameTR: 'Boğa', symbol: '♉', dateRange: '20 Nisan - 20 Mayıs' },
-    { sign: 'gemini', nameTR: 'İkizler', symbol: '♊', dateRange: '21 Mayıs - 20 Haziran' },
-    { sign: 'cancer', nameTR: 'Yengeç', symbol: '♋', dateRange: '21 Haziran - 22 Temmuz' },
-    { sign: 'leo', nameTR: 'Aslan', symbol: '♌', dateRange: '23 Temmuz - 22 Ağustos' },
-    { sign: 'virgo', nameTR: 'Başak', symbol: '♍', dateRange: '23 Ağustos - 22 Eylül' },
-    { sign: 'libra', nameTR: 'Terazi', symbol: '♎', dateRange: '23 Eylül - 22 Ekim' },
-    { sign: 'scorpio', nameTR: 'Akrep', symbol: '♏', dateRange: '23 Ekim - 21 Kasım' },
-    { sign: 'sagittarius', nameTR: 'Yay', symbol: '♐', dateRange: '22 Kasım - 21 Aralık' },
+    { sign: 'capricorn', symbol: '♑', dateRange: '22 Aralık - 19 Ocak' },
+    { sign: 'aquarius', symbol: '♒', dateRange: '20 Ocak - 18 Şubat' },
+    { sign: 'pisces', symbol: '♓', dateRange: '19 Şubat - 20 Mart' },
+    { sign: 'aries', symbol: '♈', dateRange: '21 Mart - 19 Nisan' },
+    { sign: 'taurus', symbol: '♉', dateRange: '20 Nisan - 20 Mayıs' },
+    { sign: 'gemini', symbol: '♊', dateRange: '21 Mayıs - 20 Haziran' },
+    { sign: 'cancer', symbol: '♋', dateRange: '21 Haziran - 22 Temmuz' },
+    { sign: 'leo', symbol: '♌', dateRange: '23 Temmuz - 22 Ağustos' },
+    { sign: 'virgo', symbol: '♍', dateRange: '23 Ağustos - 22 Eylül' },
+    { sign: 'libra', symbol: '♎', dateRange: '23 Eylül - 22 Ekim' },
+    { sign: 'scorpio', symbol: '♏', dateRange: '23 Ekim - 21 Kasım' },
+    { sign: 'sagittarius', symbol: '♐', dateRange: '22 Kasım - 21 Aralık' },
   ]
 
   if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return zodiacSigns[1] // Aquarius

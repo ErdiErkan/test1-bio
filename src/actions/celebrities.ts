@@ -2,40 +2,93 @@
 
 import { prisma } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { calculateZodiac } from '@/lib/celebrity'
-import type { SocialPlatform, DataQualityFilter } from '@/lib/types'
+import type { SocialPlatform } from '@/lib/types'
+import { Language } from '@prisma/client'
+import { z } from 'zod'
 
-// Social Link Input type for server actions
-interface SocialLinkInput {
-  platform: SocialPlatform
-  url: string
-  displayOrder?: number
+// --- Zod Schemas ---
+
+const ImageInputSchema = z.object({
+  url: z.string(),
+  isMain: z.boolean().optional(),
+  displayOrder: z.number().optional()
+})
+
+const SocialLinkInputSchema = z.object({
+  platform: z.enum(['INSTAGRAM', 'TWITTER', 'YOUTUBE', 'TIKTOK', 'FACEBOOK', 'LINKEDIN', 'WEBSITE', 'IMDB', 'SPOTIFY']),
+  url: z.string(),
+  displayOrder: z.number().optional()
+})
+
+const FAQInputSchema = z.object({
+  question: z.string(),
+  answer: z.string(),
+  displayOrder: z.number().optional()
+})
+
+const TranslationSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  // .nullable() ekleyerek null değerlerin geçmesine izin veriyoruz
+  bio: z.string().nullable().optional().or(z.literal('')),
+  profession: z.string().nullable().optional().or(z.literal('')),
+  slug: z.string().nullable().optional().or(z.literal('')),
+  nickname: z.string().nullable().optional().or(z.literal('')),
+  birthPlace: z.string().nullable().optional().or(z.literal('')),
+  nationality: z.string().nullable().optional().or(z.literal('')),
+  zodiac: z.string().nullable().optional().or(z.literal('')),
+  altText: z.string().nullable().optional().or(z.literal('')),
+  faqs: z.array(FAQInputSchema).optional()
+})
+
+const CelebritySchema = z.object({
+  common: z.object({
+    birthDate: z.string().optional().nullable().or(z.literal('')), // YYYY-MM-DD
+    gender: z.string().optional(),
+    categoryIds: z.array(z.string()),
+    images: z.array(ImageInputSchema),
+    socialLinks: z.array(SocialLinkInputSchema).optional(),
+    // faqs removed from common
+  }),
+  // RELAXED SCHEMA: Allow keys to be strings and values to be optional/nullable
+  translations: z.record(z.string(), TranslationSchema.optional().nullable())
+})
+
+type CelebrityInput = z.infer<typeof CelebritySchema>
+
+// --- Helpers ---
+
+const ZODIAC_SIGNS = [
+  { name: 'capricorn', start: { month: 1, day: 1 }, end: { month: 1, day: 19 } },
+  { name: 'aquarius', start: { month: 1, day: 20 }, end: { month: 2, day: 18 } },
+  { name: 'pisces', start: { month: 2, day: 19 }, end: { month: 3, day: 20 } },
+  { name: 'aries', start: { month: 3, day: 21 }, end: { month: 4, day: 19 } },
+  { name: 'taurus', start: { month: 4, day: 20 }, end: { month: 5, day: 20 } },
+  { name: 'gemini', start: { month: 5, day: 21 }, end: { month: 6, day: 20 } },
+  { name: 'cancer', start: { month: 6, day: 21 }, end: { month: 7, day: 22 } },
+  { name: 'leo', start: { month: 7, day: 23 }, end: { month: 8, day: 22 } },
+  { name: 'virgo', start: { month: 8, day: 23 }, end: { month: 9, day: 22 } },
+  { name: 'libra', start: { month: 9, day: 23 }, end: { month: 10, day: 22 } },
+  { name: 'scorpio', start: { month: 10, day: 23 }, end: { month: 11, day: 21 } },
+  { name: 'sagittarius', start: { month: 11, day: 22 }, end: { month: 12, day: 21 } },
+  { name: 'capricorn', start: { month: 12, day: 22 }, end: { month: 12, day: 31 } },
+]
+
+function getZodiacSign(date: Date): string {
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+
+  const sign = ZODIAC_SIGNS.find(s =>
+    (month === s.start.month && day >= s.start.day) ||
+    (month === s.end.month && day <= s.end.day)
+  )
+
+  return sign ? sign.name : ''
 }
 
-// Image Input type for server actions
-interface ImageInput {
-  url: string
-  isMain?: boolean
-  displayOrder?: number
-}
-
-// FAQ Input type for server actions
-interface FAQInput {
-  question: string
-  answer: string
-  displayOrder?: number
-}
-
-// Slug oluşturma fonksiyonu
 function createSlug(text: string): string {
   const turkishMap: Record<string, string> = {
-    'ç': 'c', 'Ç': 'C',
-    'ğ': 'g', 'Ğ': 'G',
-    'ı': 'i', 'I': 'I',
-    'İ': 'I',
-    'ö': 'o', 'Ö': 'O',
-    'ş': 's', 'Ş': 'S',
-    'ü': 'u', 'Ü': 'U',
+    'ç': 'c', 'Ç': 'C', 'ğ': 'g', 'Ğ': 'G', 'ı': 'i', 'I': 'I',
+    'İ': 'I', 'ö': 'o', 'Ö': 'O', 'ş': 's', 'Ş': 'S', 'ü': 'u', 'Ü': 'U',
   }
 
   return text
@@ -50,143 +103,556 @@ function createSlug(text: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+async function generateUniqueSlug(baseText: string, language: Language, existingId?: string) {
+  let slug = createSlug(baseText)
+  let suffix = 0
+
+  while (true) {
+    const checkSlug = suffix > 0 ? `${slug}-${suffix}` : slug
+
+    // Check collision in Translation table for this language
+    const existing = await prisma.celebrityTranslation.findFirst({
+      where: {
+        slug: checkSlug,
+        language: language,
+        ...(existingId ? { celebrityId: { not: existingId } } : {})
+      }
+    })
+
+    if (!existing) {
+      return checkSlug
+    }
+    suffix++
+  }
+}
+
+// Helper: Normalize Locale to Enum
+function getLanguage(locale: string): Language {
+  const normalized = locale.toUpperCase();
+  // Robust check: try exact match, then substring match (e.g. TR-TR -> TR)
+  if (Object.values(Language).includes(normalized as Language)) {
+    return normalized as Language;
+  }
+  const short = normalized.substring(0, 2) as Language;
+  if (Object.values(Language).includes(short)) {
+    return short;
+  }
+  return Language.EN;
+}
+
+// Helper: DTO Mapper
+function mapCelebrityToDTO(celebrity: any, locale: string) {
+  const lang = getLanguage(locale);
+  const translations = celebrity.translations || [];
+
+  // Order of preference: Requested Lang -> EN -> TR -> First Available
+  let t = translations.find((t: any) => t.language === lang);
+  if (!t) t = translations.find((t: any) => t.language === 'EN');
+  if (!t) t = translations.find((t: any) => t.language === 'TR');
+  if (!t) t = translations[0];
+
+  const categories = celebrity.categories?.map((cat: any) => {
+    const catTrans = cat.translations || [];
+    let ct = catTrans.find((t: any) => t.language === lang);
+    if (!ct) ct = catTrans.find((t: any) => t.language === 'EN');
+    if (!ct) ct = catTrans.find((t: any) => t.language === 'TR');
+    if (!ct) ct = catTrans[0];
+
+    return {
+      ...cat,
+      name: ct?.name || cat.name,
+      slug: ct?.slug || cat.slug,
+      description: ct?.description || cat.description
+    };
+  }) || [];
+
+  // Localized FAQs Filtering
+  const localizedFaqs = (celebrity.faqs || []).filter((f: any) => f.language === lang);
+  // Fallback: If no localized FAQs, try EN (if lang != EN)
+  const finalFaqs = localizedFaqs.length > 0 ? localizedFaqs : (
+    lang !== 'EN' ? (celebrity.faqs || []).filter((f: any) => f.language === 'EN') : []
+  );
+
+  return {
+    ...celebrity,
+    // Name is required, fallback to legacy if absolutely necessary
+    name: t?.name || celebrity.name,
+    // Use translation field if it exists, otherwise fallback to legacy root field
+    nickname: t ? (t.nickname || '') : (celebrity.nickname || ''),
+    profession: t ? (t.profession || '') : (celebrity.profession || ''),
+    slug: t ? (t.slug || '') : (celebrity.slug || ''),
+    bio: t ? (t.bio || '') : (celebrity.bio || ''),
+    birthPlace: t ? (t.birthPlace || '') : (celebrity.birthPlace || ''),
+    nationality: t ? (t.nationality || '') : (celebrity.nationality || ''),
+    zodiac: t ? (t.zodiac || '') : (celebrity.zodiac || ''),
+    altText: t ? (t.altText || t.name) : (celebrity.name || ''),
+
+    categories,
+    // Keep neutral fields
+    images: celebrity.images,
+    image: celebrity.images?.[0]?.url || celebrity.image || null,
+    socialMediaLinks: celebrity.socialMediaLinks,
+    faqs: finalFaqs,
+    reports: celebrity.reports,
+    birthDate: celebrity.birthDate,
+    gender: celebrity.gender
+  };
+}
+
+// ==========================================
+// PUBLIC ACTIONS
+// ==========================================
+
+export async function getCelebrityBySlug(slug: string, locale: string) {
+  try {
+    const translation = await prisma.celebrityTranslation.findFirst({
+      where: { slug },
+      select: { celebrityId: true }
+    });
+
+    let celebrityId = translation?.celebrityId;
+
+    if (!celebrityId) {
+      const legacy = await prisma.celebrity.findUnique({
+        where: { slug },
+        select: { id: true }
+      });
+      if (!legacy) return null;
+      celebrityId = legacy.id;
+    }
+
+    const celebrity = await prisma.celebrity.findUnique({
+      where: { id: celebrityId },
+      include: {
+        translations: true,
+        categories: {
+          include: {
+            translations: true
+          }
+        },
+        images: { orderBy: { displayOrder: 'asc' } },
+        socialMediaLinks: { orderBy: { displayOrder: 'asc' } },
+        faqs: { orderBy: { displayOrder: 'asc' } }
+      }
+    });
+
+    if (!celebrity) return null;
+    return mapCelebrityToDTO(celebrity, locale);
+  } catch (error) {
+    console.error('getCelebrityBySlug error:', error);
+    return null;
+  }
+}
+
 interface SearchCelebritiesParams {
   query?: string
   categorySlug?: string
   limit?: number
+  locale: string
 }
 
 export async function searchCelebrities({
   query = '',
   categorySlug,
-  limit = 10
+  limit = 10,
+  locale
 }: SearchCelebritiesParams) {
   try {
-    const where: Record<string, unknown> = {}
+    const where: any = {};
 
-    // Arama query'si
     if (query) {
       where.OR = [
-        { name: { contains: query, mode: 'insensitive' as const } },
-        { profession: { contains: query, mode: 'insensitive' as const } },
-        { bio: { contains: query, mode: 'insensitive' as const } },
-      ]
+        {
+          translations: {
+            some: {
+              OR: [
+                { name: { contains: query, mode: 'insensitive' } },
+                { profession: { contains: query, mode: 'insensitive' } },
+                { bio: { contains: query, mode: 'insensitive' } },
+              ]
+            }
+          }
+        },
+        // Fallback for non-migrated data
+        { name: { contains: query, mode: 'insensitive' } }
+      ];
     }
 
-    // Kategori filtresi
     if (categorySlug) {
       where.categories = {
         some: {
-          slug: categorySlug
+          translations: {
+            some: {
+              slug: categorySlug
+            }
+          }
         }
-      }
+      };
     }
 
     const celebrities = await prisma.celebrity.findMany({
       where,
       take: limit,
-      orderBy: { name: 'asc' },
       include: {
-        categories: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          }
-        },
-        images: {
-          orderBy: { displayOrder: 'asc' }
-        }
+        translations: true,
+        categories: { include: { translations: true } },
+        images: { orderBy: { displayOrder: 'asc' } }
       }
-    })
+    });
 
-    return { success: true, data: celebrities }
+    return {
+      success: true,
+      data: celebrities.map(c => {
+        const dto = mapCelebrityToDTO(c, locale)
+        dto.image = c.images && c.images.length > 0 ? c.images[0].url : (c.image || null)
+        return dto
+      })
+    };
   } catch (error) {
-    console.error('Search celebrities error:', error)
-    return { success: false, error: 'Arama yapılamadı' }
+    console.error('Search celebrities error:', error);
+    return { success: false, error: 'Arama yapılamadı' };
   }
 }
 
-// Admin search with advanced filters
-interface AdminSearchParams {
-  query?: string
-  categorySlug?: string
-  nationality?: string
-  dataQuality?: DataQualityFilter
-  limit?: number
-  page?: number
+export async function getUniqueNationalities() {
+  try {
+    const results = await prisma.celebrityTranslation.findMany({
+      where: {
+        nationality: { not: null }
+      },
+      select: {
+        nationality: true
+      },
+      distinct: ['nationality'],
+      orderBy: {
+        nationality: 'asc'
+      }
+    });
+
+    const nationalities = results
+      .map(r => r.nationality)
+      .filter((n): n is string => n !== null && n.trim() !== '');
+
+    return { success: true, data: nationalities };
+  } catch (error) {
+    console.error('Get unique nationalities error:', error);
+    return { success: false, error: 'Uyruklar alınamadı' };
+  }
+}
+
+// ==========================================
+// ADMIN ACTIONS
+// ==========================================
+
+export async function createCelebrity(rawData: unknown) {
+  try {
+    // 1. Validation
+    const result = CelebritySchema.safeParse(rawData);
+    if (!result.success) {
+      console.dir(result.error.format(), { depth: null });
+      return { success: false, error: 'Validation Failed', details: result.error.format() };
+    }
+    const { common, translations } = result.data;
+
+    // Auto-Calculate Zodiac
+    let zodiac = ''
+    if (common.birthDate) {
+      const date = new Date(common.birthDate)
+      zodiac = getZodiacSign(date)
+    }
+
+    // 2. Transaction
+    const celebrity = await prisma.$transaction(async (tx) => {
+      // PREPARE ROOT DATA
+      const enData = translations['EN'];
+      const primaryData = enData || (Object.values(translations)[0] as any);
+
+      const rootName = primaryData?.name || 'Unknown';
+      const rootBio = primaryData?.bio || '';
+      const rootProfession = primaryData?.profession || '';
+      const rootNickname = primaryData?.nickname || '';
+      const rootBirthPlace = primaryData?.birthPlace || '';
+      const rootNationality = primaryData?.nationality || '';
+
+      // A. Create Neutral Entity
+      const created = await tx.celebrity.create({
+        data: {
+          birthDate: common.birthDate ? new Date(common.birthDate) : null,
+          gender: common.gender,
+          zodiac: zodiac,
+          name: rootName,
+          bio: rootBio,
+          profession: rootProfession,
+          nickname: rootNickname,
+          birthPlace: rootBirthPlace,
+          nationality: rootNationality,
+          slug: `${Date.now()}-temp`,
+          categories: {
+            connect: common.categoryIds.map(id => ({ id }))
+          },
+          images: {
+            create: common.images.map(img => ({
+              url: img.url,
+              isMain: img.isMain || false,
+              displayOrder: img.displayOrder || 0
+            }))
+          },
+          socialMediaLinks: {
+            create: common.socialLinks?.map(l => ({
+              platform: l.platform,
+              url: l.url,
+              displayOrder: l.displayOrder || 0
+            }))
+          }
+          // NO FAQ Create for Common - Handled in translation Loop
+        }
+      });
+
+      // B. Create Translations
+      for (const [lang, data] of Object.entries(translations)) {
+        if (!data) continue;
+
+        const language = lang.toUpperCase() as Language;
+        if (!Object.values(Language).includes(language)) continue;
+
+        const slug = data.slug || await generateUniqueSlug(data.name, language);
+
+        await tx.celebrityTranslation.create({
+          data: {
+            celebrityId: created.id,
+            language,
+            name: data.name,
+            bio: data.bio,
+            profession: data.profession,
+            nickname: data.nickname,
+            birthPlace: data.birthPlace,
+            nationality: data.nationality,
+            zodiac: zodiac,
+            slug,
+            altText: data.altText
+          }
+        })
+
+        // B2. Create FAQs for this language
+        if (data.faqs && data.faqs.length > 0) {
+          await tx.fAQ.createMany({
+            data: data.faqs.map((f, idx) => ({
+              celebrityId: created.id,
+              language: language,
+              question: f.question,
+              answer: f.answer,
+              displayOrder: idx
+            }))
+          });
+        }
+
+        // Update Legacy Slug
+        if (language === 'EN' || (language === primaryData.language)) {
+          await tx.celebrity.update({ where: { id: created.id }, data: { slug } });
+        }
+      }
+
+      return created;
+    });
+
+    revalidatePath('/admin');
+    revalidatePath('/');
+    return { success: true, data: celebrity };
+
+  } catch (error) {
+    console.error('Create Celebrity Error:', error);
+    return { success: false, error: 'Sistem hatası oluştu.' };
+  }
+}
+
+export async function updateCelebrity(id: string, rawData: unknown) {
+  try {
+    // 1. Validation
+    const result = CelebritySchema.safeParse(rawData);
+    if (!result.success) {
+      console.dir(result.error.format(), { depth: null });
+      return { success: false, error: 'Validation Failed', details: result.error.format() };
+    }
+    const { common, translations } = result.data;
+
+    // Auto-Calculate Zodiac
+    let zodiac = ''
+    if (common.birthDate) {
+      const date = new Date(common.birthDate)
+      zodiac = getZodiacSign(date)
+    }
+
+    // 2. Transaction
+    await prisma.$transaction(async (tx) => {
+      // A. Update Neutral Fields
+      await tx.celebrity.update({
+        where: { id },
+        data: {
+          birthDate: common.birthDate ? new Date(common.birthDate) : null,
+          gender: common.gender,
+          zodiac: zodiac,
+          categories: {
+            set: common.categoryIds.map(cid => ({ id: cid }))
+          }
+        }
+      });
+
+      // B. Update Relations
+      await tx.celebrityImage.deleteMany({ where: { celebrityId: id } });
+      if (common.images.length > 0) {
+        await tx.celebrityImage.createMany({
+          data: common.images.map(img => ({
+            celebrityId: id,
+            url: img.url,
+            isMain: img.isMain || false,
+            displayOrder: img.displayOrder || 0
+          }))
+        });
+      }
+
+      if (common.socialLinks) {
+        await tx.socialMediaLink.deleteMany({ where: { celebrityId: id } });
+        if (common.socialLinks.length > 0) {
+          await tx.socialMediaLink.createMany({
+            data: common.socialLinks.map(l => ({
+              celebrityId: id,
+              platform: l.platform,
+              url: l.url,
+              displayOrder: l.displayOrder || 0
+            }))
+          });
+        }
+      }
+
+      // FAQs removed from common loop. They are handled per language below.
+
+      // C. Upsert Translations
+      for (const [lang, data] of Object.entries(translations)) {
+        if (!data) continue;
+        const language = lang.toUpperCase() as Language;
+        if (!Object.values(Language).includes(language)) continue;
+
+        let slug = data.slug;
+        if (!slug) slug = await generateUniqueSlug(data.name, language, id);
+
+        await tx.celebrityTranslation.upsert({
+          where: {
+            celebrityId_language: { celebrityId: id, language }
+          },
+          update: {
+            name: data.name,
+            bio: data.bio,
+            profession: data.profession,
+            nickname: data.nickname,
+            birthPlace: data.birthPlace,
+            nationality: data.nationality,
+            zodiac: zodiac,
+            slug,
+            altText: data.altText
+          },
+          create: {
+            celebrityId: id,
+            language,
+            name: data.name,
+            bio: data.bio,
+            profession: data.profession,
+            nickname: data.nickname,
+            birthPlace: data.birthPlace,
+            nationality: data.nationality,
+            zodiac: zodiac,
+            slug,
+            altText: data.altText
+          }
+        });
+
+        // FAQ Update for this Language (Delete & Recreate for this language only)
+        if (data.faqs) {
+          await tx.fAQ.deleteMany({
+            where: {
+              celebrityId: id,
+              language: language
+            }
+          });
+
+          if (data.faqs.length > 0) {
+            await tx.fAQ.createMany({
+              data: data.faqs.map((f, idx) => ({
+                celebrityId: id,
+                language: language,
+                question: f.question,
+                answer: f.answer,
+                displayOrder: idx
+              }))
+            });
+          }
+        }
+
+        // CRITICAL SYNC: Update Root Legacy Fields if EN
+        if (language === 'EN') {
+          console.log(`Syncing EN translation to Root Celebrity for ID: ${id}`);
+          await tx.celebrity.update({
+            where: { id },
+            data: {
+              name: data.name,
+              bio: data.bio,
+              profession: data.profession,
+              slug: slug,
+              nickname: data.nickname,
+              birthPlace: data.birthPlace,
+              nationality: data.nationality
+            }
+          });
+        }
+      }
+    });
+
+    revalidatePath('/admin');
+    revalidatePath('/');
+    return { success: true };
+
+  } catch (error) {
+    console.error('Update Celebrity Error:', error);
+    return { success: false, error: 'Güncelleme başarısız.' };
+  }
+}
+
+export async function deleteCelebrity(id: string) {
+  try {
+    const celebrity = await prisma.celebrity.delete({
+      where: { id }
+    })
+    revalidatePath('/admin')
+    revalidatePath('/')
+    return { success: true, data: celebrity }
+  } catch (error) {
+    console.error('Delete celebrity error:', error)
+    return { success: false, error: 'Ünlü silinemedi' }
+  }
 }
 
 export async function searchCelebritiesAdmin({
   query = '',
-  categorySlug,
-  nationality,
-  dataQuality,
   limit = 50,
   page = 1
-}: AdminSearchParams) {
+}: any) {
   try {
-    const where: Record<string, unknown> = {}
+    const where: any = {}
 
-    // Text search
     if (query) {
       where.OR = [
-        { name: { contains: query, mode: 'insensitive' as const } },
-        { profession: { contains: query, mode: 'insensitive' as const } },
+        {
+          translations: {
+            some: {
+              name: { contains: query, mode: 'insensitive' }
+            }
+          }
+        },
+        // Fallback for Admin search too to match legacy names
+        { name: { contains: query, mode: 'insensitive' } }
       ]
     }
 
-    // Category filter
-    if (categorySlug) {
-      where.categories = {
-        some: {
-          slug: categorySlug
-        }
-      }
-    }
-
-    // Nationality filter
-    if (nationality) {
-      where.nationality = nationality
-    }
-
-    // Data quality filters
-    if (dataQuality) {
-      switch (dataQuality) {
-        case 'no_bio':
-          where.OR = [
-            { bio: null },
-            { bio: '' }
-          ]
-          break
-        case 'no_image':
-          where.AND = [
-            {
-              OR: [
-                { image: null },
-                { image: '' }
-              ]
-            },
-            {
-              images: { none: {} }
-            }
-          ]
-          break
-        case 'has_pending_reports':
-          where.reports = {
-            some: {
-              status: 'PENDING'
-            }
-          }
-          break
-        case 'no_faqs':
-          where.faqs = { none: {} }
-          break
-      }
-    }
-
     const skip = (page - 1) * limit
-
     const [celebrities, total] = await Promise.all([
       prisma.celebrity.findMany({
         where,
@@ -194,19 +660,9 @@ export async function searchCelebritiesAdmin({
         skip,
         orderBy: { createdAt: 'desc' },
         include: {
-          categories: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            }
-          },
-          images: {
-            orderBy: { displayOrder: 'asc' }
-          },
-          faqs: {
-            orderBy: { displayOrder: 'asc' }
-          },
+          translations: true,
+          categories: true,
+          images: true,
           _count: {
             select: {
               reports: {
@@ -232,323 +688,7 @@ export async function searchCelebritiesAdmin({
       }
     }
   } catch (error) {
-    console.error('Admin search celebrities error:', error)
-    return { success: false, error: 'Arama yapılamadı' }
-  }
-}
-
-export async function createCelebrity(data: {
-  name: string
-  nickname?: string
-  profession?: string
-  birthDate?: string
-  birthPlace?: string
-  nationality?: string
-  bio?: string
-  image?: string
-  categoryIds: string[]
-  socialLinks?: SocialLinkInput[]
-  images?: ImageInput[]
-  faqs?: FAQInput[]
-}) {
-  try {
-    if (!data.name?.trim()) {
-      return { success: false, error: 'İsim alanı zorunludur' }
-    }
-
-    // Zodiac (Burç) Hesaplama
-    let zodiac = null
-    if (data.birthDate) {
-      const zInfo = calculateZodiac(data.birthDate)
-      if (zInfo) zodiac = zInfo.sign
-    }
-
-    // Slug oluştur
-    let slug = createSlug(data.name)
-    let slugSuffix = 0
-
-    // Benzersiz slug kontrolü
-    while (true) {
-      const checkSlug = slugSuffix > 0 ? `${slug}-${slugSuffix}` : slug
-      const existing = await prisma.celebrity.findUnique({
-        where: { slug: checkSlug }
-      })
-
-      if (!existing) {
-        slug = checkSlug
-        break
-      }
-      slugSuffix++
-    }
-
-    // Determine main image URL for backward compatibility
-    const mainImageUrl = data.images && data.images.length > 0
-      ? data.images.find(img => img.isMain)?.url || data.images[0]?.url
-      : data.image?.trim() || null
-
-    const celebrity = await prisma.celebrity.create({
-      data: {
-        name: data.name.trim(),
-        slug,
-        nickname: data.nickname?.trim() || null,
-        profession: data.profession?.trim() || null,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        zodiac,
-        birthPlace: data.birthPlace?.trim() || null,
-        nationality: data.nationality?.trim() || null,
-        bio: data.bio?.trim() || null,
-        image: mainImageUrl, // For backward compatibility
-        categories: {
-          connect: data.categoryIds.map(id => ({ id }))
-        },
-        // Social Media Links - nested create
-        ...(data.socialLinks && data.socialLinks.length > 0 && {
-          socialMediaLinks: {
-            create: data.socialLinks.map((link, index) => ({
-              platform: link.platform,
-              url: link.url.trim(),
-              displayOrder: link.displayOrder ?? index
-            }))
-          }
-        }),
-        // Images - nested create (max 3)
-        ...(data.images && data.images.length > 0 && {
-          images: {
-            create: data.images.slice(0, 3).map((img, index) => ({
-              url: img.url.trim(),
-              isMain: index === 0 ? true : (img.isMain ?? false),
-              displayOrder: img.displayOrder ?? index
-            }))
-          }
-        }),
-        // FAQs - nested create
-        ...(data.faqs && data.faqs.length > 0 && {
-          faqs: {
-            create: data.faqs
-              .filter(faq => faq.question.trim() && faq.answer.trim())
-              .map((faq, index) => ({
-                question: faq.question.trim(),
-                answer: faq.answer.trim(),
-                displayOrder: faq.displayOrder ?? index
-              }))
-          }
-        })
-      },
-      include: {
-        categories: true,
-        socialMediaLinks: {
-          orderBy: { displayOrder: 'asc' }
-        },
-        images: {
-          orderBy: { displayOrder: 'asc' }
-        },
-        faqs: {
-          orderBy: { displayOrder: 'asc' }
-        }
-      }
-    })
-
-    revalidatePath('/admin')
-    revalidatePath('/')
-    return { success: true, data: celebrity }
-  } catch (error) {
-    console.error('Create celebrity error:', error)
-    return { success: false, error: 'Ünlü eklenemedi' }
-  }
-}
-
-export async function updateCelebrity(
-  id: string,
-  data: {
-    name: string
-    nickname?: string
-    profession?: string
-    birthDate?: string
-    birthPlace?: string
-    nationality?: string
-    bio?: string
-    image?: string
-    categoryIds: string[]
-    socialLinks?: SocialLinkInput[]
-    images?: ImageInput[]
-    faqs?: FAQInput[]
-  }
-) {
-  try {
-    if (!data.name?.trim()) {
-      return { success: false, error: 'İsim alanı zorunludur' }
-    }
-
-    // Zodiac (Burç) Hesaplama
-    let zodiac = null
-    if (data.birthDate) {
-      const zInfo = calculateZodiac(data.birthDate)
-      if (zInfo) zodiac = zInfo.sign
-    }
-
-    // Mevcut ünlüyü al
-    const existing = await prisma.celebrity.findUnique({
-      where: { id },
-      include: { categories: true }
-    })
-
-    if (!existing) {
-      return { success: false, error: 'Ünlü bulunamadı' }
-    }
-
-    // İsim değiştiyse slug'ı güncelle
-    let slug = existing.slug
-    if (existing.name !== data.name.trim()) {
-      slug = createSlug(data.name)
-      let slugSuffix = 0
-
-      while (true) {
-        const checkSlug = slugSuffix > 0 ? `${slug}-${slugSuffix}` : slug
-        const slugExists = await prisma.celebrity.findUnique({
-          where: { slug: checkSlug }
-        })
-
-        if (!slugExists || slugExists.id === id) {
-          slug = checkSlug
-          break
-        }
-        slugSuffix++
-      }
-    }
-
-    // Determine main image URL for backward compatibility
-    const mainImageUrl = data.images && data.images.length > 0
-      ? data.images.find(img => img.isMain)?.url || data.images[0]?.url
-      : data.image?.trim() || null
-
-    // Transaction ile atomik işlem garantisi
-    const celebrity = await prisma.$transaction(async (tx) => {
-      // Mevcut sosyal medya linklerini sil
-      await tx.socialMediaLink.deleteMany({
-        where: { celebrityId: id }
-      })
-
-      // Mevcut resimleri sil
-      await tx.celebrityImage.deleteMany({
-        where: { celebrityId: id }
-      })
-
-      // Mevcut FAQ'ları sil
-      await tx.fAQ.deleteMany({
-        where: { celebrityId: id }
-      })
-
-      // Celebrity'yi güncelle ve yeni ilişkili verileri oluştur
-      return tx.celebrity.update({
-        where: { id },
-        data: {
-          name: data.name.trim(),
-          slug,
-          nickname: data.nickname?.trim() || null,
-          profession: data.profession?.trim() || null,
-          birthDate: data.birthDate ? new Date(data.birthDate) : null,
-          zodiac,
-          birthPlace: data.birthPlace?.trim() || null,
-          nationality: data.nationality?.trim() || null,
-          bio: data.bio?.trim() || null,
-          image: mainImageUrl, // For backward compatibility
-          categories: {
-            set: data.categoryIds.map(categoryId => ({ id: categoryId }))
-          },
-          // Yeni sosyal medya linklerini oluştur
-          ...(data.socialLinks && data.socialLinks.length > 0 && {
-            socialMediaLinks: {
-              create: data.socialLinks.map((link, index) => ({
-                platform: link.platform,
-                url: link.url.trim(),
-                displayOrder: link.displayOrder ?? index
-              }))
-            }
-          }),
-          // Yeni resimleri oluştur (max 3)
-          ...(data.images && data.images.length > 0 && {
-            images: {
-              create: data.images.slice(0, 3).map((img, index) => ({
-                url: img.url.trim(),
-                isMain: index === 0 ? true : (img.isMain ?? false),
-                displayOrder: img.displayOrder ?? index
-              }))
-            }
-          }),
-          // Yeni FAQ'ları oluştur
-          ...(data.faqs && data.faqs.length > 0 && {
-            faqs: {
-              create: data.faqs
-                .filter(faq => faq.question.trim() && faq.answer.trim())
-                .map((faq, index) => ({
-                  question: faq.question.trim(),
-                  answer: faq.answer.trim(),
-                  displayOrder: faq.displayOrder ?? index
-                }))
-            }
-          })
-        },
-        include: {
-          categories: true,
-          socialMediaLinks: {
-            orderBy: { displayOrder: 'asc' }
-          },
-          images: {
-            orderBy: { displayOrder: 'asc' }
-          },
-          faqs: {
-            orderBy: { displayOrder: 'asc' }
-          }
-        }
-      })
-    })
-
-    revalidatePath('/admin')
-    revalidatePath('/')
-    revalidatePath(`/celebrity/${celebrity.slug}`)
-    return { success: true, data: celebrity }
-  } catch (error) {
-    console.error('Update celebrity error:', error)
-    return { success: false, error: 'Ünlü güncellenemedi' }
-  }
-}
-
-export async function deleteCelebrity(id: string) {
-  try {
-    const celebrity = await prisma.celebrity.delete({
-      where: { id }
-    })
-
-    revalidatePath('/admin')
-    revalidatePath('/')
-    return { success: true, data: celebrity }
-  } catch (error) {
-    console.error('Delete celebrity error:', error)
-    return { success: false, error: 'Ünlü silinemedi' }
-  }
-}
-
-// Get all unique nationalities for filter dropdown
-export async function getUniqueNationalities() {
-  try {
-    const celebrities = await prisma.celebrity.findMany({
-      where: {
-        nationality: { not: null }
-      },
-      select: {
-        nationality: true
-      },
-      distinct: ['nationality']
-    })
-
-    const nationalities = celebrities
-      .map(c => c.nationality)
-      .filter((n): n is string => n !== null)
-      .sort()
-
-    return { success: true, data: nationalities }
-  } catch (error) {
-    console.error('Get nationalities error:', error)
-    return { success: false, error: 'Uyruklar alınamadı' }
+    console.error('Search Admin Error:', error)
+    return { success: false, error: 'Arama başarısız' }
   }
 }

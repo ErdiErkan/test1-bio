@@ -1,12 +1,13 @@
 "use client"
 
 import Image from 'next/image'
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useToast } from '@/hooks/useToast'
 import AdminFilterBar from '@/components/admin/AdminFilterBar'
 import type { DataQualityFilter, CelebrityImage, FAQ } from '@/lib/types'
+import { useTranslations } from 'next-intl'
 
 interface Celebrity {
   id: string
@@ -37,6 +38,8 @@ const CelebrityAvatar = ({ celebrity }: { celebrity: Celebrity }) => {
       <Image
         src={`${imageUrl}?v=${new Date().getTime()}`}
         alt={celebrity.name}
+        width={40}
+        height={40}
         className="h-10 w-10 rounded-full object-cover border border-gray-200"
         onError={() => setError(true)}
       />
@@ -53,7 +56,7 @@ const CelebrityAvatar = ({ celebrity }: { celebrity: Celebrity }) => {
 // Data quality badges
 const DataQualityBadges = ({ celebrity }: { celebrity: Celebrity }) => {
   const badges: { label: string; color: string }[] = []
-
+  // Not: Rozet isimleri şimdilik statik, isterseniz çeviri ekleyebilirsiniz.
   const hasImages = (celebrity.images && celebrity.images.length > 0) || celebrity.image
   if (!hasImages) {
     badges.push({ label: 'Resim Yok', color: 'bg-yellow-100 text-yellow-800' })
@@ -93,6 +96,12 @@ function AdminPageContent() {
     totalPages: 0
   })
   const { addToast } = useToast()
+  
+  // ✅ Çeviri Hook'ları
+  const tNav = useTranslations('admin.nav')
+  const tDash = useTranslations('admin.dashboard')
+  const tTable = useTranslations('admin.table')
+  const tCommon = useTranslations('common')
 
   const fetchCelebrities = useCallback(async () => {
     setLoading(true)
@@ -112,14 +121,14 @@ function AdminPageContent() {
       if (page) params.set('page', page)
       params.set('limit', '50')
 
-      // ✅ GÜNCELLEME: URL sonuna t=${Date.now()} ekleyerek cache'i kırıyoruz
+      // Cache buster
       const cacheBuster = `&t=${Date.now()}`
 
       const response = await fetch(`/api/celebrities/admin?${params.toString()}${cacheBuster}`, {
         cache: 'no-store',
         headers: {
           'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache, no-store, must-revalidate' // Header'ı güçlendiriyoruz
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       })
 
@@ -179,8 +188,8 @@ function AdminPageContent() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Panel</h1>
-          <p className="text-gray-600">Ünlü biyografilerini yönetin</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{tDash('title')}</h1>
+          <p className="text-gray-600">{tDash('subtitle')}</p>
         </div>
 
         {/* Navigation */}
@@ -189,25 +198,25 @@ function AdminPageContent() {
             href="/admin"
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
-            Ünlüler
+            {tNav('celebrities')}
           </Link>
           <Link
             href="/admin/categories"
             className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
-            Kategoriler
+            {tNav('categories')}
           </Link>
           <Link
             href="/admin/reports"
             className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
-            Geri Bildirimler
+            {tNav('feedbacks')}
           </Link>
           <Link
             href="/"
             className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
           >
-            Ana Sayfa
+            {tNav('home')}
           </Link>
         </div>
 
@@ -217,7 +226,7 @@ function AdminPageContent() {
             <div className="flex items-center">
               <div className="text-3xl mr-4">👥</div>
               <div>
-                <div className="text-sm font-medium text-gray-500">Toplam Ünlü</div>
+                <div className="text-sm font-medium text-gray-500">{tDash('total_celebrities')}</div>
                 <div className="text-2xl font-bold text-gray-900">{pagination.total || celebrities.length}</div>
               </div>
             </div>
@@ -226,7 +235,7 @@ function AdminPageContent() {
             <div className="flex items-center">
               <div className="text-3xl mr-4">📄</div>
               <div>
-                <div className="text-sm font-medium text-gray-500">Sayfa</div>
+                <div className="text-sm font-medium text-gray-500">{tDash('page')}</div>
                 <div className="text-2xl font-bold text-gray-900">
                   {pagination.page} / {pagination.totalPages || 1}
                 </div>
@@ -237,8 +246,8 @@ function AdminPageContent() {
             <div className="flex items-center">
               <div className="text-3xl mr-4">📊</div>
               <div>
-                <div className="text-sm font-medium text-gray-500">Gösterilen</div>
-                <div className="text-2xl font-bold text-gray-900">{celebrities.length} kayıt</div>
+                <div className="text-sm font-medium text-gray-500">{tDash('showing')}</div>
+                <div className="text-2xl font-bold text-gray-900">{celebrities.length} {tDash('records')}</div>
               </div>
             </div>
           </div>
@@ -250,12 +259,12 @@ function AdminPageContent() {
         {/* Header with Add Button */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900">Ünlü Listesi</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{tDash('celebrity_list')}</h2>
             <Link
               href="/admin/add"
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors min-h-[44px] inline-flex items-center"
             >
-              + Yeni Ünlü Ekle
+              {tDash('add_new')}
             </Link>
           </div>
         </div>
@@ -264,25 +273,25 @@ function AdminPageContent() {
         {loading ? (
           <div className="bg-white rounded-lg shadow text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Yükleniyor...</p>
+            <p className="text-gray-600">{tCommon('loading')}</p>
           </div>
         ) : celebrities.length === 0 ? (
           <div className="bg-white rounded-lg shadow text-center py-12">
             <div className="text-6xl mb-4">👥</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchParams.toString() ? 'Sonuç bulunamadı' : 'Henüz ünlü eklenmemiş'}
+              {searchParams.toString() ? tTable('no_results') : tTable('no_records')}
             </h3>
             <p className="text-gray-500 mb-4">
               {searchParams.toString()
-                ? 'Filtreleri değiştirmeyi deneyin'
-                : 'İlk ünlüyü ekleyerek başlayın'}
+                ? tDash('clear_filters')
+                : tTable('add_first')}
             </p>
             {!searchParams.toString() && (
               <Link
                 href="/admin/add"
                 className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
               >
-                + İlk Ünlüyü Ekle
+                {tDash('add_new')}
               </Link>
             )}
           </div>
@@ -293,19 +302,19 @@ function AdminPageContent() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Ünlü
+                      {tTable('celebrity')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Meslek
+                      {tTable('profession')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Durum
+                      {tTable('status')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Eklenme
+                      {tTable('added_date')}
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      İşlemler
+                      {tTable('actions')}
                     </th>
                   </tr>
                 </thead>
@@ -326,7 +335,7 @@ function AdminPageContent() {
                               target="_blank"
                               className="text-sm text-blue-600 hover:text-blue-800"
                             >
-                              Görüntüle
+                              {tTable('view')}
                             </Link>
                           </div>
                         </div>
@@ -346,13 +355,13 @@ function AdminPageContent() {
                             href={`/admin/edit/${celebrity.id}`}
                             className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 min-h-[36px] inline-flex items-center"
                           >
-                            Düzenle
+                            {tTable('edit')}
                           </Link>
                           <button
                             onClick={() => setShowDeleteModal(celebrity)}
                             className="bg-red-600 text-white px-3 py-2 rounded-md text-sm hover:bg-red-700 min-h-[36px]"
                           >
-                            Sil
+                            {tTable('delete')}
                           </button>
                         </div>
                       </td>
@@ -366,7 +375,7 @@ function AdminPageContent() {
             {pagination.totalPages > 1 && (
               <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <div className="text-sm text-gray-500">
-                  Toplam {pagination.total} kayıt, sayfa {pagination.page}/{pagination.totalPages}
+                  {tDash('total_celebrities')} {pagination.total}, {tDash('page')} {pagination.page}/{pagination.totalPages}
                 </div>
                 <div className="flex gap-2">
                   {pagination.page > 1 && (
@@ -374,7 +383,7 @@ function AdminPageContent() {
                       href={`/admin?page=${pagination.page - 1}${searchParams.get('q') ? `&q=${searchParams.get('q')}` : ''}${searchParams.get('category') ? `&category=${searchParams.get('category')}` : ''}${searchParams.get('nationality') ? `&nationality=${searchParams.get('nationality')}` : ''}${searchParams.get('dataQuality') ? `&dataQuality=${searchParams.get('dataQuality')}` : ''}`}
                       className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 min-h-[44px] inline-flex items-center"
                     >
-                      Önceki
+                      ←
                     </Link>
                   )}
                   {pagination.page < pagination.totalPages && (
@@ -382,7 +391,7 @@ function AdminPageContent() {
                       href={`/admin?page=${pagination.page + 1}${searchParams.get('q') ? `&q=${searchParams.get('q')}` : ''}${searchParams.get('category') ? `&category=${searchParams.get('category')}` : ''}${searchParams.get('nationality') ? `&nationality=${searchParams.get('nationality')}` : ''}${searchParams.get('dataQuality') ? `&dataQuality=${searchParams.get('dataQuality')}` : ''}`}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 min-h-[44px] inline-flex items-center"
                     >
-                      Sonraki
+                      →
                     </Link>
                   )}
                 </div>
@@ -395,24 +404,27 @@ function AdminPageContent() {
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Ünlüyü Sil</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">{tDash('delete_title')}</h3>
               <p className="text-gray-600 mb-6">
-                <strong>{showDeleteModal.name}</strong> adlı ünlüyü silmek istediğinizden emin misiniz?
-                Bu işlem geri alınamaz.
+                {/* next-intl Rich Text Formatting */}
+                {tDash.rich('delete_confirm', {
+                  name: showDeleteModal.name,
+                  strong: (chunks: ReactNode) => <strong>{chunks}</strong>
+                })}
               </p>
               <div className="flex justify-end space-x-4">
                 <button
                   onClick={() => setShowDeleteModal(null)}
                   className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 min-h-[44px]"
                 >
-                  İptal
+                  {tDash('cancel')}
                 </button>
                 <button
                   onClick={() => handleDelete(showDeleteModal)}
                   disabled={deletingId === showDeleteModal.id}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 min-h-[44px]"
                 >
-                  {deletingId === showDeleteModal.id ? 'Siliniyor...' : 'Sil'}
+                  {deletingId === showDeleteModal.id ? tDash('deleting') : tDash('delete')}
                 </button>
               </div>
             </div>
@@ -429,7 +441,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Yükleniyor...</p>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     }>

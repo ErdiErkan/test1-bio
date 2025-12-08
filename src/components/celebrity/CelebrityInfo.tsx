@@ -1,3 +1,6 @@
+
+import { useTranslations } from 'next-intl'
+
 interface Celebrity {
   id: string
   name: string
@@ -9,10 +12,12 @@ interface CelebrityInfoProps {
 }
 
 export default function CelebrityInfo({ celebrity }: CelebrityInfoProps) {
+  const t = useTranslations('celebrity')
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        📖 Biyografi
+        📖 {t('biography')}
       </h2>
 
       {celebrity.bio ? (
@@ -25,10 +30,10 @@ export default function CelebrityInfo({ celebrity }: CelebrityInfoProps) {
         <div className="text-center py-12">
           <div className="text-6xl mb-4">📝</div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Biyografi Henüz Eklenmemiş
+            {t('no_bio_title')}
           </h3>
           <p className="text-gray-600">
-            Bu ünlünün biyografisi henüz eklenmemiş. Admin panelinden ekleyebilirsiniz.
+            {t('no_bio_desc')}
           </p>
         </div>
       )}

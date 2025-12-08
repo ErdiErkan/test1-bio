@@ -9,6 +9,46 @@ datasource db {
 }
 
 // ============================================
+// Enums
+// ============================================
+
+enum Language {
+  EN // en-US
+  TR // tr-TR
+  ES // es-ES
+  IT // it-IT
+  PT // pt-PT
+  FR // fr-FR
+  DE // de-DE
+}
+
+enum ReportStatus {
+  PENDING
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum ReportType {
+  WRONG_INFO
+  TYPO
+  IMAGE_ISSUE
+  OTHER
+}
+
+enum SocialPlatform {
+  INSTAGRAM
+  TWITTER
+  YOUTUBE
+  TIKTOK
+  FACEBOOK
+  LINKEDIN
+  WEBSITE
+  IMDB
+  SPOTIFY
+}
+
+// ============================================
 // User Model - Authentication
 // ============================================
 model User {
@@ -25,57 +65,45 @@ model User {
 }
 
 // ============================================
-// Report Status Enum
-// ============================================
-enum ReportStatus {
-  PENDING
-  IN_REVIEW
-  RESOLVED
-  REJECTED
-}
-
-// ============================================
-// Report Type Enum
-// ============================================
-enum ReportType {
-  WRONG_INFO
-  TYPO
-  IMAGE_ISSUE
-  OTHER
-}
-
-// ============================================
-// Social Platform Enum
-// ============================================
-enum SocialPlatform {
-  INSTAGRAM
-  TWITTER
-  YOUTUBE
-  TIKTOK
-  FACEBOOK
-  LINKEDIN
-  WEBSITE
-  IMDB
-  SPOTIFY
-}
-
-// ============================================
 // Category Model - Flexible categorization
 // ============================================
 model Category {
   id          String   @id @default(cuid())
+  
+  // Legacy fields (Keep for migration)
   name        String   @unique @db.VarChar(100)
   slug        String   @unique @db.VarChar(100)
   description String?  @db.Text
+  
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   // Many-to-Many relationship
   celebrities Celebrity[]
+  
+  // Translations
+  translations CategoryTranslation[]
 
   @@index([name])
   @@index([slug])
   @@map("categories")
+}
+
+model CategoryTranslation {
+  id          String   @id @default(cuid())
+  language    Language
+  
+  name        String   @db.VarChar(100)
+  slug        String   @db.VarChar(100)
+  description String?  @db.Text
+
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, language])
+  @@unique([slug, language])
+  @@index([name])
+  @@map("category_translations")
 }
 
 // ============================================
@@ -83,16 +111,22 @@ model Category {
 // ============================================
 model Celebrity {
   id          String   @id @default(cuid())
+  
+  // Legacy fields (Keep for migration)
   name        String   @db.VarChar(255)
   nickname    String?  @db.VarChar(255)
   profession  String?  @db.VarChar(255)
-  birthDate   DateTime?
-  birthPlace  String?  @db.VarChar(255)
+  birthPlace  String?  @db.VarChar(255) 
   nationality String?  @db.VarChar(10)
-  zodiac      String?  @db.VarChar(20) // aries, taurus, vb
+  zodiac      String?  @db.VarChar(20)
   bio         String?  @db.Text
-  image       String?  @db.VarChar(1000) // @deprecated - Use images relation instead. Kept for backward compatibility.
   slug        String   @unique @db.VarChar(300)
+  
+  // Neutral Fields
+  birthDate   DateTime?
+  gender      String?   @db.VarChar(50) // New field
+  image       String?   @db.VarChar(1000) // @deprecated - Use images relation instead.
+  
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
@@ -110,16 +144,54 @@ model Celebrity {
 
   // One-to-Many relationship with Reports
   reports Report[]
+  
+  // Translations
+  translations CelebrityTranslation[]
 
   // Performance indexes
   @@index([name])
   @@index([profession])
   @@index([nationality])
-  @@index([zodiac]) // Filtreleme performansı için index ekledik
+  @@index([zodiac])
   @@index([createdAt(sort: Desc)])
   @@index([slug])
+  @@index([gender])
 
   @@map("celebrities")
+}
+
+model CelebrityTranslation {
+  id          String   @id @default(cuid())
+  language    Language
+  
+  // Translatable Content
+  name        String   @db.VarChar(255)
+  nickname    String?  @db.VarChar(255)
+  profession  String?  @db.VarChar(255)
+  slug        String   @db.VarChar(300)
+  bio         String?  @db.Text
+  
+  // Location/Details that might differ by language
+  birthPlace  String?  @db.VarChar(255) 
+  nationality String?  @db.VarChar(10) 
+  zodiac      String?  @db.VarChar(20) 
+  
+  // SEO
+  altText     String?  @db.VarChar(255) 
+
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  // Constraints & Indices for Performance
+  @@unique([celebrityId, language])
+  @@unique([slug, language])
+  
+  @@index([language])
+  @@index([name]) 
+  @@index([profession])
+  @@index([slug])
+  
+  @@map("celebrity_translations")
 }
 
 // ============================================
@@ -143,25 +215,6 @@ model CelebrityImage {
   @@map("celebrity_images")
 }
 
-// ============================================
-// FAQ Model - Frequently Asked Questions for SEO
-// ============================================
-model FAQ {
-  id           String   @id @default(cuid())
-  question     String   @db.VarChar(500)
-  answer       String   @db.Text
-  displayOrder Int      @default(0)
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
-
-  // Relation to Celebrity
-  celebrityId String
-  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
-
-  @@index([celebrityId])
-  @@index([displayOrder])
-  @@map("faqs")
-}
 
 // ============================================
 // Social Media Link Model
@@ -184,6 +237,26 @@ model SocialMediaLink {
 }
 
 // ============================================
+// FAQ Model - Frequently Asked Questions
+// ============================================
+model FAQ {
+  id           String   @id @default(cuid())
+  question     String   @db.VarChar(500)
+  answer       String   @db.Text
+  language     Language @default(EN)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  @@index([celebrityId])
+  @@index([celebrityId, language])
+  @@map("faqs")
+}
+
+// ============================================
 // Report Model - User feedback for content errors
 // ============================================
 model Report {
@@ -194,12 +267,16 @@ model Report {
   message      String       @db.VarChar(1000)
   contactEmail String?      @db.VarChar(255)
   status       ReportStatus @default(PENDING)
+
+  language     Language     @default(EN)
+
   ipAddress    String?      @db.VarChar(45)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([celebrityId])
   @@index([status])
+  @@index([language])
   @@index([createdAt(sort: Desc)])
   @@map("reports")
 }

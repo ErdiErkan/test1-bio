@@ -32,20 +32,20 @@ export default function AdminReportsPage() {
   const t = useTranslations('admin.reports')
   const tNav = useTranslations('admin.nav')
   const locale = useLocale()
-  
+
   const [reports, setReports] = useState<ReportWithCelebrity[]>([])
   const [loading, setLoading] = useState(true)
-  
+
   // Filtreler
   const [statusFilter, setStatusFilter] = useState<ReportStatus | 'ALL'>('PENDING')
   const [langFilter, setLangFilter] = useState<Language | 'ALL'>('ALL')
-  
+
   const [counts, setCounts] = useState({ pending: 0, inReview: 0, resolved: 0, rejected: 0, total: 0 })
-  
+
   // Modal State
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState<ReportWithCelebrity | null>(null)
-  
+
   const { addToast } = useToast()
 
   // Veri Çekme Fonksiyonu
@@ -129,7 +129,7 @@ export default function AdminReportsPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Sayfa Başlığı */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('title')}</h1>
@@ -137,25 +137,7 @@ export default function AdminReportsPage() {
         </div>
 
         {/* Navigasyon */}
-        <div className="mb-8 flex flex-wrap gap-4">
-          <Link href="/admin" className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center">
-            {tNav('celebrities')}
-          </Link>
-          <Link href="/admin/categories" className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center">
-            {tNav('categories')}
-          </Link>
-          <Link href="/admin/reports" className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] inline-flex items-center">
-            {tNav('feedbacks')}
-            {counts.pending > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full shadow-sm">
-                {counts.pending}
-              </span>
-            )}
-          </Link>
-          <Link href="/" className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center">
-            {tNav('home')}
-          </Link>
-        </div>
+
 
         {/* İstatistik Kartları */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -183,7 +165,7 @@ export default function AdminReportsPage() {
 
         {/* Filtre Alanı */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          
+
           {/* Durum Filtreleri (Tab) */}
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             {[
@@ -196,11 +178,10 @@ export default function AdminReportsPage() {
               <button
                 key={tab.value}
                 onClick={() => setStatusFilter(tab.value)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm flex-1 md:flex-none ${
-                  statusFilter === tab.value
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm flex-1 md:flex-none ${statusFilter === tab.value
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -211,8 +192,8 @@ export default function AdminReportsPage() {
           <div className="flex items-center gap-3 w-full md:w-auto">
             <span className="text-sm font-medium text-gray-500 whitespace-nowrap">{t('filter_lang')}:</span>
             <div className="relative w-full md:w-40">
-              <select 
-                value={langFilter} 
+              <select
+                value={langFilter}
                 onChange={(e) => setLangFilter(e.target.value as Language | 'ALL')}
                 className="w-full appearance-none px-4 py-2 pr-8 border border-gray-300 rounded-lg bg-white font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow cursor-pointer"
               >
@@ -236,13 +217,13 @@ export default function AdminReportsPage() {
             <div className="p-8"><LoadingSkeleton /></div>
           ) : reports.length === 0 ? (
             <div className="text-center py-16 px-4">
-                <div className="text-6xl mb-4 opacity-50">📭</div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {t('table.no_results_title')}
-                </h3>
-                <p className="text-gray-500 max-w-sm mx-auto">
-                  {t('table.no_results_desc')}
-                </p>
+              <div className="text-6xl mb-4 opacity-50">📭</div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {t('table.no_results_title')}
+              </h3>
+              <p className="text-gray-500 max-w-sm mx-auto">
+                {t('table.no_results_desc')}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -267,11 +248,11 @@ export default function AdminReportsPage() {
                           {t(`statuses.${report.status}`)}
                         </span>
                       </td>
-                      
+
                       {/* Dil */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200">
-                          {report.language || 'EN'} 
+                          {report.language || 'EN'}
                         </span>
                       </td>
 
@@ -324,7 +305,7 @@ export default function AdminReportsPage() {
                               <option key={s} value={s}>{t(`statuses.${s}`)}</option>
                             ))}
                           </select>
-                          
+
                           <Link
                             href={`/admin/edit/${report.celebrity.id}`}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -332,7 +313,7 @@ export default function AdminReportsPage() {
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </Link>
-                          
+
                           <button
                             onClick={() => setShowDeleteModal(report)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -350,7 +331,7 @@ export default function AdminReportsPage() {
           )}
         </div>
       </div>
-      
+
       {/* Silme Onay Modalı */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all">
@@ -362,7 +343,7 @@ export default function AdminReportsPage() {
                 strong: (chunks) => <strong className="font-semibold text-gray-900">{chunks}</strong>
               })}
             </p>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('table.type')}</span>
@@ -388,7 +369,7 @@ export default function AdminReportsPage() {
               >
                 {deletingId === showDeleteModal.id ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                    <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
                     {t('delete.deleting')}
                   </>
                 ) : (

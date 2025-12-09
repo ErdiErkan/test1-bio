@@ -142,6 +142,9 @@ model Celebrity {
   // One-to-Many relationship with Social Media Links
   socialMediaLinks SocialMediaLink[]
 
+  // One-to-Many relationship with Stats
+  stats CelebrityStats[]
+
   // One-to-Many relationship with Reports
   reports Report[]
   
@@ -279,4 +282,43 @@ model Report {
   @@index([language])
   @@index([createdAt(sort: Desc)])
   @@map("reports")
+}
+
+// ============================================
+// Analytics & Ranking System
+// ============================================
+
+enum Period {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  ALL_TIME
+}
+
+model CelebrityStats {
+  id          String   @id @default(cuid())
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+  
+  period      Period
+  date        DateTime @db.Date // For historical tracking (e.g. 2023-12-08)
+  
+  views       Int      @default(0)
+  boosts      Int      @default(0)
+  
+  rankGlobal  Int      @default(0)
+  rankLocal   Int      @default(0) 
+  
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  // Compound indexes for fast retrieval as requested
+  @@index([period, rankLocal])
+  @@index([celebrityId, period])
+  
+  // Unique constraint to prevent duplicate stats for same period/date
+  @@unique([celebrityId, period, date])
+  
+  @@map("celebrity_stats")
 }

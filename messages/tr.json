@@ -252,6 +252,27 @@
       }
     }
   },
+  "analytics": {
+    "title": "Canlı Analitik",
+    "period": "Periyot",
+    "dimension": "Boyut",
+    "filter_placeholder": "Filtrele...",
+    "views": "Görüntülenme & Boost",
+    "live_data": "Canlı Veri",
+    "periods": {
+      "daily": "Günlük",
+      "weekly": "Haftalık",
+      "monthly": "Aylık",
+      "yearly": "Yıllık",
+      "all_time": "Tüm Zamanlar"
+    },
+    "dimensions": {
+      "global": "Genel Sıralama",
+      "category": "Kategori Bazlı",
+      "zodiac": "Burç Bazlı",
+      "born": "Doğum Yılı"
+    }
+  },
   "search": {
     "placeholder": "Ünlü ara (Örn: Kemal Sunal, oyuncu...)",
     "all": "Tümü"

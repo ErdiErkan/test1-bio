@@ -147,6 +147,8 @@ model Celebrity {
 
   // One-to-Many relationship with Reports
   reports Report[]
+
+  publishedLanguages String[] @default([])
   
   // Translations
   translations CelebrityTranslation[]
@@ -321,4 +323,15 @@ model CelebrityStats {
   @@unique([celebrityId, period, date])
   
   @@map("celebrity_stats")
+}
+
+model SystemSetting {
+  key         String  @id @unique
+  value       Json
+  description String?
+
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("system_settings")
 }

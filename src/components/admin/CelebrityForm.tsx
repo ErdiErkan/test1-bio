@@ -62,6 +62,7 @@ interface CommonData {
   gender: string
   categoryIds: string[]
   images: ImageInput[]
+  publishedLanguages: Language[]
 }
 
 // "SharedState" holds values that populate all languages automatically
@@ -188,6 +189,7 @@ export default function CelebrityForm({ celebrity, isEdit }: CelebrityFormProps)
         birthDate: celebrity?.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
         gender: celebrity?.gender || '',
         categoryIds: celebrity?.categories?.map((c: any) => c.id) || [],
+        publishedLanguages: celebrity?.publishedLanguages || [],
         images: (celebrity?.images || []).map((img: any, idx: number) => ({
           id: generateId(),
           url: getSafeUrl(img.url),
@@ -270,6 +272,7 @@ export default function CelebrityForm({ celebrity, isEdit }: CelebrityFormProps)
         birthDate: celebrity.birthDate ? new Date(celebrity.birthDate).toISOString().split('T')[0] : '',
         gender: celebrity.gender || '',
         categoryIds: celebrity.categories?.map((c: any) => c.id) || [],
+        publishedLanguages: celebrity.publishedLanguages || [],
         images: (celebrity.images || []).map((img: any) => ({
           id: generateId(),
           url: getSafeUrl(img.url),
@@ -390,6 +393,14 @@ export default function CelebrityForm({ celebrity, isEdit }: CelebrityFormProps)
       ? current.filter(c => c !== id)
       : [...current, id]
     handleCommonChange('categoryIds', next)
+  }
+
+  const handleLanguageToggle = (code: Language) => {
+    const current = formState.common.publishedLanguages
+    const next = current.includes(code)
+        ? current.filter(c => c !== code)
+        : [...current, code]
+    handleCommonChange('publishedLanguages', next)
   }
 
   const handleAddImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -744,6 +755,29 @@ export default function CelebrityForm({ celebrity, isEdit }: CelebrityFormProps)
               </label>
             ))}
           </div>
+        </div>
+
+        {/* Published Languages */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Published Languages</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {LANGUAGES.map(lang => (
+              <label key={lang.code} className={`flex items-center px-4 py-3 border rounded-lg cursor-pointer transition-colors ${formState.common.publishedLanguages.includes(lang.code) ? 'bg-green-50 border-green-500' : 'hover:bg-gray-50'
+                }`}>
+                <input
+                  type="checkbox"
+                  checked={formState.common.publishedLanguages.includes(lang.code)}
+                  onChange={() => handleLanguageToggle(lang.code)}
+                  className="mr-2"
+                />
+                <span className="text-sm flex items-center gap-2">
+                    <span>{lang.flag}</span>
+                    <span>{lang.label}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">If unchecked, the profile will return 404 for that language locale.</p>
         </div>
 
         {/* Image Upload */}

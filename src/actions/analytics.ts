@@ -2,8 +2,11 @@
 
 import { z } from 'zod';
 import { redis } from '@/lib/redis';
+import { prisma } from '@/lib/db';
 import { getPeriodKeys } from '@/lib/date-utils';
 import { unstable_cache } from 'next/cache';
+import { RedisKeys } from '@/lib/redis-keys';
+import { headers } from 'next/headers';
 
 // Validation Schema for Interaction
 const interactionSchema = z.object({
@@ -34,6 +37,38 @@ const POINTS = {
     boost: 10,
 } as const;
 
+// Default config values (fallback)
+const DEFAULT_BOOST_COOLDOWN = 60; // seconds
+const DEFAULT_BOOST_WEIGHT = 10;
+
+async function getSystemSettings() {
+    try {
+        const settings = await prisma.systemSetting.findMany({
+            where: {
+                key: { in: ['BOOST_COOLDOWN', 'BOOST_WEIGHT'] }
+            }
+        });
+
+        const config = {
+            BOOST_COOLDOWN: DEFAULT_BOOST_COOLDOWN,
+            BOOST_WEIGHT: DEFAULT_BOOST_WEIGHT,
+        };
+
+        settings.forEach(s => {
+            if (s.key === 'BOOST_COOLDOWN') config.BOOST_COOLDOWN = s.value as number;
+            if (s.key === 'BOOST_WEIGHT') config.BOOST_WEIGHT = s.value as number;
+        });
+
+        return config;
+    } catch (e) {
+        console.error('[Analytics] Failed to fetch system settings:', e);
+        return {
+            BOOST_COOLDOWN: DEFAULT_BOOST_COOLDOWN,
+            BOOST_WEIGHT: DEFAULT_BOOST_WEIGHT,
+        };
+    }
+}
+
 /**
  * Records a user interaction (view or boost) in Redis using a Write-Behind pattern.
  * Increments multiple ZSET keys concurrently via pipeline.
@@ -42,12 +77,54 @@ export async function recordInteraction(input: InteractionInput) {
     try {
         // 1. Validate Input
         const data = interactionSchema.parse(input);
-        const score = POINTS[data.type];
         const now = new Date();
         const periods = getPeriodKeys(now);
 
-        // 2. Prepare Pipeline
+        // 2. Rate Limiting for Boosts
+        if (data.type === 'boost') {
+            const headersList = await headers();
+            const ip = headersList.get('x-forwarded-for') || 'unknown';
+            const rateLimitKey = RedisKeys.rateLimitBoost(ip, data.celebrityId);
+
+            // Get dynamic cooldown from DB (cached or direct)
+            // For performance, we might want to cache this in memory or Redis too,
+            // but for now let's fetch or use defaults.
+            // A better approach is to not block the write on DB read.
+            // So we'll try to set with NX EX.
+
+            const settings = await getSystemSettings();
+
+            const isAllowed = await redis.set(rateLimitKey, '1', 'EX', settings.BOOST_COOLDOWN, 'NX');
+
+            if (!isAllowed) {
+                return { success: false, error: 'Rate limit exceeded' };
+            }
+        }
+
+        // 3. Prepare Pipeline
         const pipeline = redis.pipeline();
+
+        // Determine score weight
+        let score = 0;
+        if (data.type === 'view') {
+            score = 1;
+            // Record View
+            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.daily), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.weekly), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.monthly), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.yearly), 1, data.celebrityId);
+        } else {
+            // Get weight for boost
+            // We can fetch it again or assume the one from rate limit check is close enough
+            const settings = await getSystemSettings();
+            score = settings.BOOST_WEIGHT;
+
+            // Record Boost
+            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.daily), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.weekly), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.monthly), 1, data.celebrityId);
+            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.yearly), 1, data.celebrityId);
+        }
 
         // Helper to add increments to pipeline
         const addIncrements = (keyPrefix: string) => {
@@ -89,6 +166,7 @@ export async function recordInteraction(input: InteractionInput) {
 
     } catch (error) {
         console.error('[Analytics] Failed to record interaction:', error);
+        // Soft fail: return false but don't crash app
         return { success: false, error: 'Analytics Error' };
     }
 }
@@ -237,16 +315,8 @@ export async function getTrendingCelebrities(locale: string) {
 
             // 3. Fallback to All Time if still empty (Brand new locale?)
             if (!results || results.length === 0) {
-                redisKey = `rank:${locale}:global:all_time`; // Fixed key logic from recordInteraction
-                // Wait, recordInteraction uses rank:global:all_time (no locale) 
-                // AND rank:{locale}:global:all_time.
-                // Let's try locale specific first
-                results = await redis.zrevrange(`rank:${locale}:global:all_time`, 0, 11, 'WITHSCORES');
-
-                if (results.length === 0) {
-                    // Absolute last resort: Global non-locale
-                    results = await redis.zrevrange(`rank:global:all_time`, 0, 11, 'WITHSCORES');
-                }
+                // Absolute last resort: Global non-locale
+                results = await redis.zrevrange(`rank:global:all_time`, 0, 11, 'WITHSCORES');
             }
 
             if (results.length === 0) return [];
@@ -261,45 +331,48 @@ export async function getTrendingCelebrities(locale: string) {
                 });
             }
 
-            // Fetch details from Prisma
-            // We import prisma from lib/db inside the function to avoid strict-mode top-level issues if any
-            // (Though usually top-level is fine in server actions)
-            const { prisma } = await import('@/lib/db');
-
-            const dbCelebrities = await prisma.celebrity.findMany({
-                where: { id: { in: trendingItems.map(i => i.id) } },
-                select: {
-                    id: true,
-                    name: true,
-                    slug: true,
-                    profession: true,
-                    image: true,
-                    images: { where: { isMain: true }, take: 1, select: { url: true, isMain: true } },
-                    translations: {
-                        where: { language: locale.toUpperCase() as any },
-                        select: { name: true, profession: true, slug: true }
+            try {
+                // Fetch details from Prisma
+                const dbCelebrities = await prisma.celebrity.findMany({
+                    where: { id: { in: trendingItems.map(i => i.id) } },
+                    select: {
+                        id: true,
+                        name: true,
+                        slug: true,
+                        profession: true,
+                        image: true,
+                        images: { where: { isMain: true }, take: 1, select: { url: true, isMain: true } },
+                        translations: {
+                            where: { language: locale.toUpperCase() as any },
+                            select: { name: true, profession: true, slug: true }
+                        }
                     }
-                }
-            });
+                });
 
-            // Map DB details back to Rank Order
-            const completeList = trendingItems.map(item => {
-                const details = dbCelebrities.find(c => c.id === item.id);
-                if (!details) return null; // Should not happen often unless deleted
+                // Map DB details back to Rank Order
+                const completeList = trendingItems.map(item => {
+                    const details = dbCelebrities.find(c => c.id === item.id);
+                    if (!details) return null; // Should not happen often unless deleted
 
-                const t = details.translations[0];
+                    const t = details.translations[0];
 
-                return {
-                    ...item,
-                    name: t?.name || details.name,
-                    profession: t?.profession || details.profession,
-                    slug: t?.slug || details.slug,
-                    // Prefer images relation
-                    image: details.images?.[0]?.url || details.image
-                };
-            }).filter(Boolean) as TrendingCelebrity[];
+                    return {
+                        ...item,
+                        name: t?.name || details.name,
+                        profession: t?.profession || details.profession,
+                        slug: t?.slug || details.slug,
+                        // Prefer images relation
+                        image: details.images?.[0]?.url || details.image
+                    };
+                }).filter(Boolean) as TrendingCelebrity[];
 
-            return completeList;
+                return completeList;
+
+            } catch (error) {
+                console.error('[Analytics] Failed to fetch trending details from DB:', error);
+                // Return empty list so page doesn't crash, it just shows empty state
+                return [];
+            }
         },
         ['trending-celebrities', locale], // Cache Key
         {
@@ -309,4 +382,38 @@ export async function getTrendingCelebrities(locale: string) {
     );
 
     return getTrending();
+}
+
+/**
+ * Gets a random celebrity slug for instant redirection.
+ */
+export async function getRandomCelebrity(locale: string): Promise<string | null> {
+  try {
+      // 1. Try Redis Set
+      const slug = await redis.srandmember(RedisKeys.indexSlugs(locale));
+      if (slug) return slug;
+
+      // 2. Fallback to DB (heavy)
+      const count = await prisma.celebrity.count();
+      const skip = Math.floor(Math.random() * count);
+      const randomCeleb = await prisma.celebrity.findFirst({
+          skip: skip,
+          select: {
+              slug: true,
+              translations: {
+                  where: { language: locale.toUpperCase() as any },
+                  select: { slug: true }
+              }
+          }
+      });
+
+      if (!randomCeleb) return null;
+
+      const t = randomCeleb.translations[0];
+      return t?.slug || randomCeleb.slug;
+
+  } catch (error) {
+      console.error('[Analytics] Failed to get random celebrity:', error);
+      return null;
+  }
 }

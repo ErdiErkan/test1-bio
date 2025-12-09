@@ -11,21 +11,23 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // 1. Admin Route Protection Strategy
-  // Check if path contains /admin (e.g. /en/admin, /tr/admin, /admin)
-  const isAdminPath = pathname.includes('/admin');
+
+  // Check if path contains /admin (e.g. /en/admin, /tr/admin, /admin) or localized variants like /yonetim
+  const protectedPrefixes = ['/admin', '/yonetim'];
+  const isAdminPath = protectedPrefixes.some(prefix => pathname.includes(prefix));
 
   if (isAdminPath) {
     // If user is not logged in
     if (!req.auth) {
       // --- DÜZELTME BAŞLANGICI ---
-      
+
       // 1. Mevcut dili URL'den tespit etmeye çalış
       const segments = pathname.split('/');
       const maybeLocale = segments[1]; // Örneğin: /tr/admin -> 'tr', /admin -> 'admin'
-      
+
       // Eğer URL'deki ilk kısım geçerli bir dil ise onu kullan, değilse varsayılan dili (en) kullan
-      const locale = routing.locales.includes(maybeLocale as any) 
-        ? maybeLocale 
+      const locale = routing.locales.includes(maybeLocale as any)
+        ? maybeLocale
         : routing.defaultLocale;
 
       // 2. Login sayfasının o dildeki yolunu bul
@@ -33,9 +35,9 @@ export default auth((req) => {
       // (TypeScript hatası almamak için 'any' kullanıyoruz)
       const pathnames = (routing as any).pathnames || {};
       const loginRouteConfig = pathnames['/login'];
-      
+
       let loginPath = '/login';
-      
+
       if (typeof loginRouteConfig === 'object') {
         // Eğer dile özel path tanımlıysa onu al (Örn: tr için '/giris')
         loginPath = loginRouteConfig[locale] || '/login';
@@ -46,11 +48,11 @@ export default auth((req) => {
       // 3. Doğru URL'e yönlendir: /{locale}/{loginPath}
       // Örnek: /tr/giris veya /en/login
       const targetUrl = `/${locale}${loginPath}`;
-      
+
       const loginUrl = new URL(targetUrl, req.nextUrl.origin);
       // Geri dönüş URL'ini de koru
       loginUrl.searchParams.set('callbackUrl', pathname);
-      
+
       return NextResponse.redirect(loginUrl);
       // --- DÜZELTME BİTİŞİ ---
     }

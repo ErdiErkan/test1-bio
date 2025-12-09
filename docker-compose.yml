@@ -21,6 +21,21 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis (Alpine for small footprint)
+  redis:
+    image: redis:alpine
+    container_name: celebhub_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    networks:
+      - celebhub_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Next.js Application
   app:
     build:

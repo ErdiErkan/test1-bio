@@ -6,6 +6,9 @@ import { prisma } from '@/lib/db'
 import { Metadata } from 'next'
 import { getCategories } from '@/actions/categories'
 import { getTranslations } from 'next-intl/server'
+import TrendingSection from '@/components/home/TrendingSection'
+import TrendingSkeleton from '@/components/home/TrendingSkeleton'
+import { getTrendingCelebrities } from '@/actions/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,10 +64,10 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
         some: {
           OR: [
             { slug: categorySlug }, // Ana tablo
-            { 
-              translations: { 
+            {
+              translations: {
                 some: { slug: categorySlug } // Çeviri tablosu
-              } 
+              }
             }
           ]
         }
@@ -93,7 +96,7 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
       if (!isNaN(year)) {
         const startDate = new Date(`${year}-01-01`)
         const endDate = new Date(`${year}-12-31`)
-        
+
         where.birthDate = {
           gte: startDate,
           lte: endDate
@@ -111,7 +114,7 @@ async function getCelebrities({ search, categorySlug, nationality, birthYear, zo
           take: 1,
           select: { url: true }
         },
-        translations: true 
+        translations: true
       }
     })
     return celebrities
@@ -136,9 +139,9 @@ function LoadingGrid() {
 
 function mapCelebrityForCard(celebrity: any, locale: string) {
   const lang = locale.toUpperCase();
-  const t = celebrity.translations?.find((t: any) => t.language === lang) || 
-            celebrity.translations?.find((t: any) => t.language === 'EN') || 
-            celebrity.translations?.[0];
+  const t = celebrity.translations?.find((t: any) => t.language === lang) ||
+    celebrity.translations?.find((t: any) => t.language === 'EN') ||
+    celebrity.translations?.[0];
 
   return {
     id: celebrity.id,
@@ -151,22 +154,22 @@ function mapCelebrityForCard(celebrity: any, locale: string) {
 }
 
 // Wrapper bileşeni
-async function CelebritiesWrapper({ 
-  search, 
-  category, 
-  nationality, 
+async function CelebritiesWrapper({
+  search,
+  category,
+  nationality,
   birthYear,
   zodiac,
   locale,
   categories // ✅ Kategoriler listesi prop olarak alındı
 }: SearchParamsProps & { category?: string, locale: string, categories: Category[] }) {
-  
-  const rawCelebrities = await getCelebrities({ 
-    search, 
-    categorySlug: category, 
-    nationality, 
+
+  const rawCelebrities = await getCelebrities({
+    search,
+    categorySlug: category,
+    nationality,
     birthYear,
-    zodiac 
+    zodiac
   })
 
   const celebrities = rawCelebrities.map(c => mapCelebrityForCard(c, locale));
@@ -177,7 +180,7 @@ async function CelebritiesWrapper({
 
   // Başlık mantığı (Dinamik ve Çevirili)
   let title = locale === 'tr' ? "Son Eklenen Ünlüler" : "Latest Added Celebrities";
-  
+
   if (search) {
     title = locale === 'tr' ? `"${search}" için sonuçlar` : `Results for "${search}"`;
   }
@@ -185,7 +188,7 @@ async function CelebritiesWrapper({
     // Slug'a karşılık gelen kategori ismini bul (Doğru dil için)
     const catObj = categories.find(c => c.slug === category);
     const catName = catObj ? catObj.name : (category.charAt(0).toUpperCase() + category.slice(1));
-    
+
     // "Kategori: X" formatını yerelleştir
     title = `${tCommon('category')}: ${catName}`;
   }
@@ -226,8 +229,8 @@ async function CelebritiesWrapper({
 // Sayfa Props Tanımı
 interface HomePageProps {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ 
-    q?: string; 
+  searchParams: Promise<{
+    q?: string;
     category?: string;
     nationality?: string;
     birthYear?: string;
@@ -238,7 +241,7 @@ interface HomePageProps {
 export default async function HomePage({ params, searchParams }: HomePageProps) {
   const { locale } = await params;
   const queryParams = await searchParams;
-  
+
   const search = queryParams?.q
   const category = queryParams?.category
   const nationality = queryParams?.nationality
@@ -269,18 +272,34 @@ export default async function HomePage({ params, searchParams }: HomePageProps) 
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Trending Section (Phase 4 Visualization) */}
+        {!search && !category && !nationality && !birthYear && !zodiac && (
+          <Suspense fallback={<TrendingSkeleton />}>
+            <TrendingSectionWrapper locale={locale} />
+          </Suspense>
+        )}
+
         <Suspense fallback={<LoadingGrid />}>
-          <CelebritiesWrapper 
-            search={search} 
-            category={category} 
+          <CelebritiesWrapper
+            search={search}
+            category={category}
             nationality={nationality}
             birthYear={birthYear}
             zodiac={zodiac}
             locale={locale}
-            categories={categories} // ✅ Kategorileri iletiyoruz
+            categories={categories}
           />
         </Suspense>
       </section>
     </div>
   )
+}
+
+async function TrendingSectionWrapper({ locale }: { locale: string }) {
+  const trendingData = await getTrendingCelebrities(locale);
+  const tCommon = await getTranslations('common');
+  // Fallback title if translation missing
+  const title = locale === 'tr' ? '🔥 Haftanın En Popülerleri' : '🔥 Trending This Week';
+
+  return <TrendingSection data={trendingData} title={title} />;
 }

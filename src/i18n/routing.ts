@@ -15,6 +15,13 @@ export const routing = defineRouting({
         '/': '/',
         '/login': { en: '/login', tr: '/giris' },
         '/admin': { en: '/admin', tr: '/yonetim' },
+        // ✅ EKLENEN ADMIN ROTALARI
+        '/admin/categories': { en: '/admin/categories', tr: '/yonetim/kategoriler' },
+        '/admin/analytics': { en: '/admin/analytics', tr: '/yonetim/analitik' },
+        '/admin/reports': { en: '/admin/reports', tr: '/yonetim/bildirimler' },
+        '/admin/add': { en: '/admin/add', tr: '/yonetim/ekle' },
+        '/admin/edit/[id]': { en: '/admin/edit/[id]', tr: '/yonetim/duzenle/[id]' },
+
         '/celebrity/[slug]': {
             en: '/celebrity/[slug]',
             tr: '/unlu/[slug]',

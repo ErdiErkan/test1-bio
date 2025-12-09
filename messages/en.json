@@ -252,6 +252,27 @@
       }
     }
   },
+  "analytics": {
+    "title": "Live Analytics",
+    "period": "Period",
+    "dimension": "Dimension",
+    "filter_placeholder": "Filter...",
+    "views": "Views & Boosts",
+    "live_data": "Live Data",
+    "periods": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "all_time": "All Time"
+    },
+    "dimensions": {
+      "global": "Global Ranking",
+      "category": "By Category",
+      "zodiac": "By Zodiac",
+      "born": "By Birth Year"
+    }
+  },
   "search": {
     "placeholder": "Search celebrity (e.g. Actor, Singer...)",
     "all": "All"

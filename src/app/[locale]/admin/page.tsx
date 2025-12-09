@@ -96,7 +96,7 @@ function AdminPageContent() {
     totalPages: 0
   })
   const { addToast } = useToast()
-  
+
   // ✅ Çeviri Hook'ları
   const tNav = useTranslations('admin.nav')
   const tDash = useTranslations('admin.dashboard')
@@ -192,33 +192,6 @@ function AdminPageContent() {
           <p className="text-gray-600">{tDash('subtitle')}</p>
         </div>
 
-        {/* Navigation */}
-        <div className="mb-8 flex flex-wrap gap-4">
-          <Link
-            href="/admin"
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] inline-flex items-center"
-          >
-            {tNav('celebrities')}
-          </Link>
-          <Link
-            href="/admin/categories"
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
-          >
-            {tNav('categories')}
-          </Link>
-          <Link
-            href="/admin/reports"
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
-          >
-            {tNav('feedbacks')}
-          </Link>
-          <Link
-            href="/"
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] inline-flex items-center"
-          >
-            {tNav('home')}
-          </Link>
-        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

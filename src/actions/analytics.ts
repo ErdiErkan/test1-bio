@@ -8,7 +8,6 @@ import { unstable_cache } from 'next/cache';
 import { RedisKeys, Periods } from '@/lib/redis-keys';
 import { headers } from 'next/headers';
 import { after } from 'next/server'; // Non-blocking writes
-import { Language } from '@prisma/client';
 
 // Validation Schema for Interaction
 const interactionSchema = z.object({
@@ -95,7 +94,7 @@ export async function recordInteraction(input: InteractionInput) {
             }
         }
 
-        // 3. Prepare Pipeline inside `after` for non-blocking execution
+        // 3. Background Processing (Non-blocking)
         after(async () => {
             try {
                 const now = new Date();
@@ -103,76 +102,105 @@ export async function recordInteraction(input: InteractionInput) {
                 const pipeline = redis.pipeline();
                 const settings = await getSystemSettings();
 
-                let score = 0;
-                if (data.type === 'view') {
-                    score = 1;
-                    // Counters: Views (With Date Keys)
-                    pipeline.zincrby(RedisKeys.statViews(locale, Periods.DAILY, periods.daily), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statViews(locale, Periods.WEEKLY, periods.weekly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statViews(locale, Periods.MONTHLY, periods.monthly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statViews(locale, Periods.YEARLY, periods.yearly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statViews(locale, Periods.ALL_TIME, 'all_time'), 1, data.celebrityId);
-                } else {
-                    score = settings.BOOST_WEIGHT;
-                    // Counters: Boosts (With Date Keys)
-                    pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.DAILY, periods.daily), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.WEEKLY, periods.weekly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.MONTHLY, periods.monthly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.YEARLY, periods.yearly), 1, data.celebrityId);
-                    pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.ALL_TIME, 'all_time'), 1, data.celebrityId);
+                // 3.1 Fetch Celebrity Metadata from DB if missing
+                // This guarantees filters work even if client just sends { id, type }
+                let categories: string[] = data.categorySlug ? [data.categorySlug] : [];
+                let zodiac = data.zodiac;
+                let birthYear = data.birthYear;
+
+                const celebrity = await prisma.celebrity.findUnique({
+                    where: { id: data.celebrityId },
+                    select: {
+                        zodiac: true,
+                        birthDate: true,
+                        categories: {
+                            select: { 
+                                slug: true,
+                                translations: {
+                                    where: { language: locale.toUpperCase() as any },
+                                    select: { slug: true }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (celebrity) {
+                    // Normalize Zodiac
+                    if (!zodiac && celebrity.zodiac) zodiac = celebrity.zodiac.toLowerCase();
+                    
+                    // Normalize Birth Year
+                    if (!birthYear && celebrity.birthDate) birthYear = celebrity.birthDate.getFullYear();
+                    
+                    // Normalize Categories (Get ALL categories for this celeb)
+                    const dbCategories = celebrity.categories.map(c => {
+                        const t = c.translations[0];
+                        return t?.slug || c.slug;
+                    });
+                    // Merge categories, avoid duplicates
+                    categories = Array.from(new Set([...categories, ...dbCategories]));
                 }
 
-                // Helper to add increments and set TTL for Rankings
-                const addRankIncrements = (
-                    genKey: (p: string, d: string) => string
-                ) => {
+                // 3.2 Determine Score
+                const score = data.type === 'view' ? 1 : settings.BOOST_WEIGHT;
+
+                // 3.3 Counters (Stat Views/Boosts)
+                const statKeyGen = data.type === 'view' ? RedisKeys.statViews : RedisKeys.statBoosts;
+                
+                [Periods.DAILY, Periods.WEEKLY, Periods.MONTHLY, Periods.YEARLY, Periods.ALL_TIME].forEach(p => {
+                    const dKey = p === Periods.ALL_TIME ? 'all_time' : periods[p as keyof typeof periods];
+                    pipeline.zincrby(statKeyGen(locale, p, dKey), 1, data.celebrityId);
+                });
+
+                // 3.4 Helper to add increments and set TTL for Rankings
+                const addRankIncrements = (genKey: (p: string, d: string) => string) => {
                     // Daily
                     const dailyKey = genKey(Periods.DAILY, periods.daily);
-                    pipeline.zincrby(dailyKey, score, data.celebrityId);
-                    pipeline.expire(dailyKey, TTL.DAILY);
+                    pipeline.zincrby(genKey(Periods.DAILY, periods.daily), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.DAILY, periods.daily), 7 * 24 * 60 * 60); // TTL
 
                     // Weekly
                     const weeklyKey = genKey(Periods.WEEKLY, periods.weekly);
-                    pipeline.zincrby(weeklyKey, score, data.celebrityId);
-                    pipeline.expire(weeklyKey, TTL.WEEKLY);
+                    pipeline.zincrby(genKey(Periods.WEEKLY, periods.weekly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.WEEKLY, periods.weekly), 30 * 24 * 60 * 60); // TTL
 
                     // Monthly
                     const monthlyKey = genKey(Periods.MONTHLY, periods.monthly);
-                    pipeline.zincrby(monthlyKey, score, data.celebrityId);
-                    pipeline.expire(monthlyKey, TTL.LONG_TERM);
+                    pipeline.zincrby(genKey(Periods.MONTHLY, periods.monthly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.MONTHLY, periods.monthly), 30 * 24 * 60 * 60); // TTL
 
                     // Yearly
                     const yearlyKey = genKey(Periods.YEARLY, periods.yearly);
-                    pipeline.zincrby(yearlyKey, score, data.celebrityId);
-                    pipeline.expire(yearlyKey, TTL.LONG_TERM);
+                    pipeline.zincrby(genKey(Periods.YEARLY, periods.yearly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.YEARLY, periods.yearly), 30 * 24 * 60 * 60); // TTL
 
                     // All Time
-                    const allTimeKey = genKey(Periods.ALL_TIME, 'all_time');
+                    const allTimeKey = genKey(Periods.ALL_TIME, 'all_time');                   
                     pipeline.zincrby(allTimeKey, score, data.celebrityId);
                     pipeline.expire(allTimeKey, TTL.LONG_TERM);
                 };
 
                 // --- 4. Rank Updates (Leaderboards & Dimensions) ---
 
-                // Rank Score (Leaderboards)
+                // Rank Score (Main Leaderboards)
                 addRankIncrements((p, d) => RedisKeys.rankScore(locale, p, d));
 
                 // Global Rank (Filtered by Locale)
                 addRankIncrements((p, d) => RedisKeys.rankGlobal(locale, p, d));
 
-                // Category Rank
-                if (data.categorySlug) {
-                    addRankIncrements((p, d) => RedisKeys.rankCategory(locale, data.categorySlug!, p, d));
-                }
+                // Category Rank (For ALL categories this celeb belongs to)
+                categories.forEach(slug => {
+                    if (slug) addRankIncrements((p, d) => RedisKeys.rankCategory(locale, slug, p, d));
+                });
 
                 // Zodiac Rank
-                if (data.zodiac) {
-                    addRankIncrements((p, d) => RedisKeys.rankZodiac(locale, data.zodiac!, p, d));
+                if (zodiac) {
+                    addRankIncrements((p, d) => RedisKeys.rankZodiac(locale, zodiac!, p, d));
                 }
 
                 // Birth Year Rank
-                if (data.birthYear) {
-                    addRankIncrements((p, d) => RedisKeys.rankBorn(locale, data.birthYear!, p, d));
+                if (birthYear) {
+                    addRankIncrements((p, d) => RedisKeys.rankBorn(locale, birthYear!, p, d));
                 }
 
                 await pipeline.exec();

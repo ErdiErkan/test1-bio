@@ -8,7 +8,12 @@ import { RedisKeys, Periods } from '@/lib/redis-keys';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminAnalyticsPage({ searchParams, params }: { searchParams: Promise<{ [key: string]: string | undefined }>, params: Promise<{ locale: string }> }) {
+type Props = {
+    searchParams: Promise<{ [key: string]: string | undefined }>;
+    params: Promise<{ locale: string }>;
+};
+
+export default async function AdminAnalyticsPage({ searchParams, params }: Props) {
     const { locale: rawLocale } = await params;
     const locale = rawLocale.toLowerCase();
     const query = await searchParams;
@@ -23,12 +28,11 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     const value = query.value || '';
 
     // --- HELPER: Fetch Stats for a Period (For Top Cards) ---
-    const fetchStats = async (periodType: string, periodKey: string) => {
-        let key = '';
-
+    const fetchTopStats = async (periodType: string, periodKey: string) => {
         // Ensure dateKey is 'all_time' if period is 'all_time'
-        const dateKey = periodType === 'all_time' ? 'all_time' : periodKey;
+        const dateKey = periodType === Periods.ALL_TIME ? 'all_time' : periodKey;
 
+        let key = '';
         if (dimension === 'global') {
             key = RedisKeys.rankGlobal(locale, periodType, dateKey);
         } else if (dimension === 'category' && value) {
@@ -38,26 +42,26 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
         } else if (dimension === 'born' && value) {
             key = RedisKeys.rankBorn(locale, value, periodType, dateKey);
         } else {
-             return [];
+             return null;
         }
 
         const res = await redis.zrevrange(key, 0, 0, 'WITHSCORES'); // Top 1 only for summary cards
         if (res && res.length > 0) {
-            return [{ id: res[0], score: parseInt(res[1]) }];
+            return { id: res[0], score: parseInt(res[1]) };
         }
-        return [];
+        return null;
     };
 
     // Parallel Fetching for Dashboard Cards
     const results = await Promise.allSettled([
-        fetchStats(Periods.WEEKLY, periods.weekly),
-        fetchStats(Periods.MONTHLY, periods.monthly),
-        fetchStats(Periods.YEARLY, periods.yearly)
+        fetchTopStats(Periods.WEEKLY, periods.weekly),
+        fetchTopStats(Periods.MONTHLY, periods.monthly),
+        fetchTopStats(Periods.YEARLY, periods.yearly)
     ]);
 
-    const weeklyTop = results[0].status === 'fulfilled' ? results[0].value : [];
-    const monthlyTop = results[1].status === 'fulfilled' ? results[1].value : [];
-    const yearlyTop = results[2].status === 'fulfilled' ? results[2].value : [];
+    const weeklyTop = results[0].status === 'fulfilled' ? results[0].value : null;
+    const monthlyTop = results[1].status === 'fulfilled' ? results[1].value : null;
+    const yearlyTop = results[2].status === 'fulfilled' ? results[2].value : null;
 
     // --- MAIN LEADERBOARD ---
 
@@ -66,7 +70,7 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     if (period !== 'all_time' && period in periods) {
         mainDateKey = periods[period as keyof typeof periods];
     } else if (period !== 'all_time') {
-        // Fallback or error if period is invalid? Default to weekly
+        // Fallback to weekly if invalid
         mainDateKey = periods.weekly;
     }
 
@@ -97,33 +101,35 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     }
 
     // ENRICHMENT: Fetch View and Boost Counts specifically using stat:views/stat:boosts keys
-    const statsPipeline = redis.pipeline();
-    parsedLeaderboard.forEach(item => {
-        const viewKey = RedisKeys.statViews(locale, period, mainDateKey);
-        const boostKey = RedisKeys.statBoosts(locale, period, mainDateKey);
-        statsPipeline.zscore(viewKey, item.id);
-        statsPipeline.zscore(boostKey, item.id);
-    });
-
-    const statsResults = await statsPipeline.exec();
-
-    if (statsResults) {
-        let resultIdx = 0;
+    if (parsedLeaderboard.length > 0) {
+        const statsPipeline = redis.pipeline();
         parsedLeaderboard.forEach(item => {
-            const [errV, viewCount] = statsResults[resultIdx++];
-            const [errB, boostCount] = statsResults[resultIdx++];
-
-            item.views = viewCount ? parseInt(viewCount as string) : 0;
-            item.boosts = boostCount ? parseInt(boostCount as string) : 0;
+            const viewKey = RedisKeys.statViews(locale, period, mainDateKey);
+            const boostKey = RedisKeys.statBoosts(locale, period, mainDateKey);
+            statsPipeline.zscore(viewKey, item.id);
+            statsPipeline.zscore(boostKey, item.id);
         });
+
+        const statsResults = await statsPipeline.exec();
+
+        if (statsResults) {
+            let resultIdx = 0;
+            parsedLeaderboard.forEach(item => {
+                const [errV, viewCount] = statsResults[resultIdx++] || [null, 0];
+                const [errB, boostCount] = statsResults[resultIdx++] || [null, 0];
+
+                item.views = viewCount ? parseInt(viewCount as string) : 0;
+                item.boosts = boostCount ? parseInt(boostCount as string) : 0;
+            });
+        }
     }
 
     // Collect all IDs to fetch
     const allIds = new Set<string>();
     parsedLeaderboard.forEach(i => allIds.add(i.id));
-    weeklyTop.forEach(i => allIds.add(i.id));
-    monthlyTop.forEach(i => allIds.add(i.id));
-    yearlyTop.forEach(i => allIds.add(i.id));
+    if (weeklyTop) allIds.add(weeklyTop.id);
+    if (monthlyTop) allIds.add(monthlyTop.id);
+    if (yearlyTop) allIds.add(yearlyTop.id);
 
     // Hydrate Names from DB
     const celebrities = await prisma.celebrity.findMany({
@@ -132,11 +138,19 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
             id: true,
             name: true,
             images: { where: { isMain: true }, take: 1, select: { url: true } },
-            image: true
+            image: true,
+            translations: {
+                where: { language: locale.toUpperCase() as any },
+                select: { name: true }
+            }
         }
     });
 
-    const getCelebName = (id: string) => celebrities.find(c => c.id === id)?.name || 'Unknown';
+    const getCelebName = (id: string) => {
+        const cel = celebrities.find(c => c.id === id);
+        return cel?.translations[0]?.name || cel?.name || 'Unknown';
+    };
+    
     const getCelebImage = (id: string) => {
          const cel = celebrities.find(c => c.id === id);
          let img = cel?.images[0]?.url || cel?.image || null;
@@ -161,59 +175,28 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
 
             {/* Visual Cards (3-Column Layout) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Weekly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                    <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Weekly</h3>
-                        <p className="text-xs text-gray-400">{periods.weekly}</p>
+                {[
+                    { title: 'Top Weekly', period: periods.weekly, data: weeklyTop, color: 'text-blue-600' },
+                    { title: 'Top Monthly', period: periods.monthly, data: monthlyTop, color: 'text-purple-600' },
+                    { title: 'Top Yearly', period: periods.yearly, data: yearlyTop, color: 'text-green-600' }
+                ].map((card, i) => (
+                    <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
+                        <div>
+                            <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">{card.title}</h3>
+                            <p className="text-xs text-gray-400">{card.period}</p>
+                        </div>
+                        {card.data ? (
+                             <div>
+                                <p className={`text-xl font-bold mt-2 truncate ${card.color}`}>
+                                    {getCelebName(card.data.id)}
+                                </p>
+                                <p className="text-sm text-gray-500">Score: {card.data.score.toLocaleString()}</p>
+                             </div>
+                        ) : (
+                            <p className="text-gray-400 italic">No data</p>
+                        )}
                     </div>
-                    {weeklyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-blue-600 mt-2 truncate">
-                                {getCelebName(weeklyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {weeklyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
-
-                {/* Monthly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                     <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Monthly</h3>
-                        <p className="text-xs text-gray-400">{periods.monthly}</p>
-                    </div>
-                    {monthlyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-purple-600 mt-2 truncate">
-                                {getCelebName(monthlyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {monthlyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
-
-                {/* Yearly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                     <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Yearly</h3>
-                        <p className="text-xs text-gray-400">{periods.yearly}</p>
-                    </div>
-                     {yearlyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-green-600 mt-2 truncate">
-                                {getCelebName(yearlyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {yearlyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
+                ))}
             </div>
 
             {/* Leaderboard Table */}
@@ -273,11 +256,11 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                                             </div>
                                             <span className="font-semibold text-gray-800">{item.name}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-right font-mono text-gray-700">
-                                            {item.views?.toLocaleString() || 0}
+                                        <td className="px-6 py-4 text-right font-mono text-blue-600 font-medium bg-blue-50/30 rounded">
+                                            {item.views?.toLocaleString()} 
                                         </td>
                                         <td className="px-6 py-4 text-right font-mono text-purple-600 font-bold bg-purple-50/30 rounded">
-                                            {item.boosts?.toLocaleString() || 0}
+                                            {item.boosts?.toLocaleString()}
                                         </td>
                                         <td className="px-6 py-4 text-right font-mono text-xs text-gray-400">
                                             {item.score.toLocaleString()}

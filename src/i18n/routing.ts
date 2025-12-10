@@ -18,9 +18,20 @@ export const routing = defineRouting({
         // ✅ EKLENEN ADMIN ROTALARI
         '/admin/categories': { en: '/admin/categories', tr: '/yonetim/kategoriler' },
         '/admin/analytics': { en: '/admin/analytics', tr: '/yonetim/analitik' },
+        '/admin/settings': { en: '/admin/settings', tr: '/yonetim/ayarlar' },
         '/admin/reports': { en: '/admin/reports', tr: '/yonetim/bildirimler' },
         '/admin/add': { en: '/admin/add', tr: '/yonetim/ekle' },
         '/admin/edit/[id]': { en: '/admin/edit/[id]', tr: '/yonetim/duzenle/[id]' },
+
+        '/trending': {
+            en: '/trending',
+            tr: '/trendler',
+            de: '/trends',
+            es: '/tendencias',
+            fr: '/tendances',
+            it: '/tendenze',
+            pt: '/tendencias'
+        },
 
         '/celebrity/[slug]': {
             en: '/celebrity/[slug]',

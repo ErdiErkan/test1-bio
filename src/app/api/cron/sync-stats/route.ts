@@ -3,8 +3,36 @@ import { redis } from '@/lib/redis';
 import { prisma } from '@/lib/db';
 import { Period } from '@prisma/client';
 import { getPeriodKeys, parsePeriodKey } from '@/lib/date-utils';
+import { RedisKeys } from '@/lib/redis-keys';
+import { Language } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
+
+async function syncSlugs() {
+    // Populate Redis Set index:{locale}:slugs with all valid slugs
+    // Required for O(1) Random Celebrity feature
+    const languages = Object.values(Language);
+    let totalSlugs = 0;
+
+    for (const lang of languages) {
+        const slugs = await prisma.celebrityTranslation.findMany({
+            where: { language: lang },
+            select: { slug: true }
+        });
+
+        if (slugs.length > 0) {
+            const redisKey = RedisKeys.indexSlugs(lang.toLowerCase());
+            // Replace the set entirely to ensure freshness?
+            // SADD adds. DEL + SADD is safer to remove stale ones.
+            const pipeline = redis.pipeline();
+            pipeline.del(redisKey);
+            pipeline.sadd(redisKey, ...slugs.map(s => s.slug));
+            await pipeline.exec();
+            totalSlugs += slugs.length;
+        }
+    }
+    return totalSlugs;
+}
 
 async function processPeriod(period: Period, redisKeySuffix: string, dateKeyVal: string) {
     const BATCH_SIZE = 100; // Smaller batch for transaction safety
@@ -98,7 +126,10 @@ export async function GET(req: NextRequest) {
             allTime: await processPeriod('ALL_TIME', 'all_time', 'all_time'),
         };
 
-        return NextResponse.json({ success: true, synced: results });
+        // 2. Sync Slugs for Random Feature
+        const syncedSlugs = await syncSlugs();
+
+        return NextResponse.json({ success: true, synced: results, syncedSlugs });
     } catch (error) {
         console.error('Sync Error:', error);
         return NextResponse.json({ error: 'Sync failed', details: String(error) }, { status: 500 });

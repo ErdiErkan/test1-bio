@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/routing'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
+import { RandomButton } from '@/components/ui/RandomButton'
 
 export default function Header() {
   const t = useTranslations('nav')
@@ -24,6 +25,13 @@ export default function Header() {
             >
               {t('home')}
             </Link>
+            <Link
+              href="/trending"
+              className="text-gray-600 hover:text-red-600 px-3 py-2 rounded-md transition-colors"
+            >
+              🔥 Trending
+            </Link>
+            <RandomButton />
             <Link
               href="/admin"
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"

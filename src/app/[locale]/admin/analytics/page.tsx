@@ -9,7 +9,8 @@ import { RedisKeys } from '@/lib/redis-keys';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAnalyticsPage({ searchParams, params }: { searchParams: Promise<{ [key: string]: string | undefined }>, params: Promise<{ locale: string }> }) {
-    const { locale } = await params;
+    const { locale: rawLocale } = await params;
+    const locale = rawLocale.toLowerCase(); // Ensure locale is always lowercase for Redis keys
     const query = await searchParams;
     const t = await getTranslations('analytics');
 
@@ -17,44 +18,34 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     const periods = getPeriodKeys(now);
 
     // Filter Params
-    const period = query.period || 'weekly';
+    const period = (query.period || 'weekly').toLowerCase();
     const dimension = query.dimension || 'global';
     const value = query.value || '';
 
     // --- HELPER: Fetch Stats for a Period ---
     const fetchStats = async (periodType: string, periodKey: string) => {
         let key = '';
+        // Using RedisKeys helper implicitly by following the pattern, or explicit construction matching the schema
+        // Schema: rank:{locale}:global:{period}:{dateKey}
+
         if (dimension === 'global') {
-            key = `rank:${locale}:global:${periodType}:${periodKey}`;
+            key = RedisKeys.rankGlobal(locale, periodType, periodKey);
         } else if (dimension === 'category' && value) {
-            key = `rank:${locale}:category:${value}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankCategory(locale, value, periodType, periodKey);
         } else if (dimension === 'zodiac' && value) {
-            // Zodiac only has monthly/yearly usually, but let's try uniform pattern if we changed it,
-            // or stick to keys in recordInteraction.
-            // recordInteraction has: rank:{locale}:zodiac:{zodiac} (without date) ??
-            // wait, recordInteraction adds to:
-            // rank:{locale}:zodiac:{zodiac}:monthly:{monthKey} etc.
-            // Let's check recordInteraction implementation again.
-            // It calls addIncrements(`rank:${data.locale}:zodiac:${data.zodiac.toLowerCase()}`);
-            // which adds :daily, :weekly, :monthly, :yearly suffixes.
-            key = `rank:${locale}:zodiac:${value.toLowerCase()}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankZodiac(locale, value.toLowerCase(), periodType, periodKey);
         } else if (dimension === 'born' && value) {
-            key = `rank:${locale}:born:${value}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankBorn(locale, value, periodType, periodKey);
         } else {
-             // Fallback for missing value
              return [];
         }
 
-        // Handle "all_time" special case
+        // Handle "all_time" special case (dateKey passed as 'all_time' usually)
         if (periodType === 'all_time') {
-             // Reconstruct key: remove :periodType:periodKey and add :all_time
-             // Actually addIncrements adds :all_time suffix directly to prefix.
-             // Prefix was `rank:${locale}:global` etc.
-             // So it becomes `rank:${locale}:global:all_time`
-             if (dimension === 'global') key = `rank:${locale}:global:all_time`;
-             else if (dimension === 'category' && value) key = `rank:${locale}:category:${value}:all_time`;
-             else if (dimension === 'zodiac' && value) key = `rank:${locale}:zodiac:${value.toLowerCase()}:all_time`;
-             else if (dimension === 'born' && value) key = `rank:${locale}:born:${value}:all_time`;
+             // RedisKeys.rankGlobal(locale, 'all_time', 'all_time') -> rank:en:global:all_time:all_time
+             // But verify if we need that or just 'rank:en:global:all_time'
+             // recordInteraction uses: genKey(Periods.ALL_TIME, 'all_time') which uses RedisKeys.rankGlobal
+             // so it is consistent.
         }
 
         const res = await redis.zrevrange(key, 0, 0, 'WITHSCORES'); // Top 1 only for summary cards
@@ -84,24 +75,20 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     let mainListKey = '';
     let timeSuffix = '';
 
-    // Construct Main List Key
-     if (period === 'all_time') {
-        timeSuffix = `:all_time`;
-    } else {
-        // period is daily, weekly, monthly, yearly
-        // we need the specific key value
-        const pKey = periods[period as keyof typeof periods];
-        timeSuffix = `:${period}:${pKey}`;
+    // Construct Main List Key using RedisKeys helper for consistency
+    let pKey = 'all_time';
+    if (period !== 'all_time') {
+        pKey = periods[period as keyof typeof periods];
     }
 
     if (dimension === 'global') {
-        mainListKey = `rank:${locale}:global${timeSuffix}`;
+        mainListKey = RedisKeys.rankGlobal(locale, period, pKey);
     } else if (dimension === 'category' && value) {
-        mainListKey = `rank:${locale}:category:${value}${timeSuffix}`;
+        mainListKey = RedisKeys.rankCategory(locale, value, period, pKey);
     } else if (dimension === 'zodiac' && value) {
-        mainListKey = `rank:${locale}:zodiac:${value.toLowerCase()}${timeSuffix}`;
+        mainListKey = RedisKeys.rankZodiac(locale, value.toLowerCase(), period, pKey);
     } else if (dimension === 'born' && value) {
-        mainListKey = `rank:${locale}:born:${value}${timeSuffix}`;
+        mainListKey = RedisKeys.rankBorn(locale, value, period, pKey);
     }
 
     const leaderboard = await redis.zrevrange(mainListKey, 0, 49, 'WITHSCORES');

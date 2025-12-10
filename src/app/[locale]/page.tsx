@@ -33,9 +33,13 @@ interface Category {
   slug: string
 }
 
-async function getCelebrities({ search, categorySlug, nationality, birthYear, zodiac }: SearchParamsProps) {
+async function getCelebrities({ search, categorySlug, nationality, birthYear, zodiac, locale }: SearchParamsProps & { locale: string }) {
   try {
     const where: any = {}
+
+    // STRICT LANGUAGE FILTERING (Phase 2 Fix)
+    const langEnum = locale.toUpperCase();
+    where.publishedLanguages = { has: langEnum };
 
     // 1. Arama query'si
     if (search) {
@@ -169,7 +173,8 @@ async function CelebritiesWrapper({
     categorySlug: category,
     nationality,
     birthYear,
-    zodiac
+    zodiac,
+    locale
   })
 
   const celebrities = rawCelebrities.map(c => mapCelebrityForCard(c, locale));

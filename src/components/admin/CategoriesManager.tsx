@@ -48,6 +48,7 @@ type FormState = {
 
 interface CategoriesManagerProps {
   initialCategories: Category[]
+  locale: string
 }
 
 const getInitialTranslation = (): TranslationData => ({
@@ -56,15 +57,21 @@ const getInitialTranslation = (): TranslationData => ({
   description: ''
 })
 
-export default function CategoriesManager({ initialCategories }: CategoriesManagerProps) {
+export default function CategoriesManager({ initialCategories, locale }: CategoriesManagerProps) {
   const t = useTranslations('admin.categories')
   const { addToast } = useToast()
+
+  // Use the passed locale as the active language (Single Source of Truth)
+  const activeLang = locale.toUpperCase() as Language
+  // Ensure we fallback if passed locale isn't in our supported list (though middleware should catch this)
+  const isSupported = LANGUAGES.some(l => l.code === activeLang)
+  const currentLangCode = isSupported ? activeLang : 'EN'
 
   const [categories, setCategories] = useState(initialCategories)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   
-  const [activeLang, setActiveLang] = useState<Language>('EN')
+  // REMOVED: const [activeLang, setActiveLang] = useState<Language>('EN')
   
   const [isPending, startTransition] = useTransition()
   
@@ -129,14 +136,14 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
     setFormState(prev => {
       const updatedTranslations = {
         ...prev.translations,
-        [activeLang]: {
-          ...prev.translations[activeLang],
+        [currentLangCode]: {
+          ...prev.translations[currentLangCode],
           [field]: value
         }
       }
 
       if (field === 'name' && !isSlugManuallyChanged) {
-        updatedTranslations[activeLang].slug = slugify(value)
+        updatedTranslations[currentLangCode].slug = slugify(value)
       }
 
       if (field === 'slug') {
@@ -156,7 +163,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
   }
 
   const handleGenerateSlug = () => {
-    const currentName = formState.translations[activeLang].name
+    const currentName = formState.translations[currentLangCode].name
     if (currentName) {
       handleTranslationChange('slug', slugify(currentName))
       setIsSlugManuallyChanged(true)
@@ -232,7 +239,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
   }
 
   const getLocalizedCategoryData = (category: Category) => {
-    const translation = category.translations?.find(t => t.language === activeLang);
+    const translation = category.translations?.find(t => t.language === currentLangCode);
     
     if (translation) {
       return {
@@ -251,9 +258,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
     };
   };
 
-  // ✅ HATA DÜZELTME:
-  // find(...) sonucu undefined olabilir. "|| 'English'" ekleyerek string olmasını garanti ettik.
-  const activeLanguageLabel = LANGUAGES.find(l => l.code === activeLang)?.label || 'English';
+  const activeLanguageLabel = LANGUAGES.find(l => l.code === currentLangCode)?.label || 'English';
 
   return (
     <div className="space-y-6">
@@ -265,20 +270,8 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
         </h3>
 
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-            <span className="text-sm font-medium text-gray-600">{t('working_language')}:</span>
-            <select
-              value={activeLang}
-              onChange={(e) => setActiveLang(e.target.value as Language)}
-              className="bg-transparent text-gray-900 text-sm font-semibold focus:outline-none cursor-pointer"
-            >
-              {LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.label}
-                </option>
-              ))}
-            </select>
-          </div>
+
+          {/* REMOVED LANGUAGE SELECTOR */}
 
           {!isAdding && (
             <button
@@ -296,8 +289,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
         <div className="bg-white rounded-lg shadow-lg p-6 border-2 border-blue-100 animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="flex justify-between items-center mb-4">
              <h4 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                {LANGUAGES.find(l => l.code === activeLang)?.flag}
-                {/* ✅ HATA DÜZELTME: activeLanguageLabel değişkenini kullandık */}
+                {LANGUAGES.find(l => l.code === currentLangCode)?.flag}
                 {t('content_entry', { lang: activeLanguageLabel })}
              </h4>
           </div>
@@ -310,10 +302,10 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
                   </label>
                   <input
                       type="text"
-                      value={formState.translations[activeLang]?.name || ''}
+                      value={formState.translations[currentLangCode]?.name || ''}
                       onChange={(e) => handleTranslationChange('name', e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      placeholder={`Örn: ${activeLang === 'TR' ? 'Oyuncu' : 'Actor'}`}
+                      placeholder={`Örn: ${currentLangCode === 'TR' ? 'Oyuncu' : 'Actor'}`}
                       required
                   />
                 </div>
@@ -331,7 +323,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
                   </label>
                   <input
                       type="text"
-                      value={formState.translations[activeLang]?.slug || ''}
+                      value={formState.translations[currentLangCode]?.slug || ''}
                       onChange={handleSlugChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-gray-600 font-mono text-sm transition-colors"
                       placeholder="url-slug"
@@ -347,7 +339,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
                 {t('form.description')}
               </label>
               <textarea
-                value={formState.translations[activeLang]?.description || ''}
+                value={formState.translations[currentLangCode]?.description || ''}
                 onChange={(e) => handleTranslationChange('description', e.target.value)}
                 rows={3}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
@@ -388,7 +380,7 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {t('table.category')} ({activeLang})
+                  {t('table.category')} ({currentLangCode})
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                   {t('table.description')}

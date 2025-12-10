@@ -44,7 +44,7 @@ export default async function CategoriesPage({ params }: { params: Promise<{ loc
 
 
 
-        <CategoriesManager initialCategories={categories} />
+        <CategoriesManager initialCategories={categories} locale={locale} />
       </div>
     </div>
   )

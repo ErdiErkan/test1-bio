@@ -106,8 +106,8 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
 
     const leaderboard = await redis.zrevrange(mainListKey, 0, 49, 'WITHSCORES');
 
-    // Parse Leaderboard
-    const parsedLeaderboard = [];
+    // Parse Leaderboard IDs and Scores (Total Score)
+    const parsedLeaderboard: { id: string; score: number; rank: number; views?: number; boosts?: number }[] = [];
     if (leaderboard && leaderboard.length > 0) {
         for (let i = 0; i < leaderboard.length; i += 2) {
             parsedLeaderboard.push({
@@ -116,6 +116,43 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                 rank: (i / 2) + 1
             });
         }
+    }
+
+    // ENRICHMENT: Fetch View and Boost Counts specifically
+    // We need to construct the keys for stats
+    // Logic: stat:views:{locale}:{period}:{dateKey}
+
+    // Determine Period and DateKey
+    let statPeriod = period === 'all_time' ? 'all_time' : period;
+    let statDateKey = 'all_time';
+
+    if (period !== 'all_time') {
+         // periods object has keys: daily, weekly, monthly, yearly
+         // period string is one of them
+         statDateKey = periods[period as keyof typeof periods];
+    }
+
+    // Pipeline fetch
+    const statsPipeline = redis.pipeline();
+    parsedLeaderboard.forEach(item => {
+        const viewKey = RedisKeys.statViews(locale, statPeriod, statDateKey);
+        const boostKey = RedisKeys.statBoosts(locale, statPeriod, statDateKey);
+        statsPipeline.zscore(viewKey, item.id);
+        statsPipeline.zscore(boostKey, item.id);
+    });
+
+    const statsResults = await statsPipeline.exec();
+
+    // Map stats back to leaderboard
+    if (statsResults) {
+        let resultIdx = 0;
+        parsedLeaderboard.forEach(item => {
+            const [errV, viewCount] = statsResults[resultIdx++];
+            const [errB, boostCount] = statsResults[resultIdx++];
+
+            item.views = viewCount ? parseInt(viewCount as string) : 0;
+            item.boosts = boostCount ? parseInt(boostCount as string) : 0;
+        });
     }
 
     // Collect all IDs to fetch (Main list + Card Tops)
@@ -234,13 +271,15 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                             <tr>
                                 <th className="px-6 py-4 w-20">Rank</th>
                                 <th className="px-6 py-4">Celebrity</th>
-                                <th className="px-6 py-4 text-right">{t('views')}</th>
+                                <th className="px-6 py-4 text-right">Views</th>
+                                <th className="px-6 py-4 text-right">Boosts</th>
+                                <th className="px-6 py-4 text-right text-xs text-gray-400">Total Score</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {hydratedLeaderboard.length === 0 ? (
                                 <tr>
-                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                                         <div className="flex flex-col items-center gap-2">
                                             <span className="text-4xl">📉</span>
                                             <p>No data found for this filter.</p>
@@ -271,7 +310,13 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                                             </div>
                                             <span className="font-semibold text-gray-800">{item.name}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-right font-mono text-blue-600 font-medium bg-blue-50/30">
+                                        <td className="px-6 py-4 text-right font-mono text-gray-700">
+                                            {item.views?.toLocaleString() || 0}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-mono text-purple-600 font-bold bg-purple-50/30 rounded">
+                                            {item.boosts?.toLocaleString() || 0}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-mono text-xs text-gray-400">
                                             {item.score.toLocaleString()}
                                         </td>
                                     </tr>

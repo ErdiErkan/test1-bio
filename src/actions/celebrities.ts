@@ -241,32 +241,13 @@ export async function getCelebrityBySlug(slug: string, locale: string) {
 
     // LANGUAGE AVAILABILITY CHECK
     const normalizedLocale = getLanguage(locale);
-    // If publishedLanguages is set (not empty), enforce it.
-    // If empty (legacy or all allowed), we skip check or maybe default to allowed.
-    // Spec says: "strictly check if locale is in publishedLanguages"
-    // Assuming if the array is empty, it might mean "Draft" or "Global"?
-    // But usually for "Control", empty means "None".
-    // However, existing data has empty array. To avoid breaking everything,
-    // we should only enforce if the array has content OR if we decide empty = none.
-    // Given "Prevent showing profiles in languages where they lack content",
-    // let's assume if the array is populated, we check.
-    // If it's completely empty, maybe we allow fallbacks?
-    // But the prompt says "Strictly check".
-    // Let's assume if publishedLanguages is defined and has length > 0, we check.
-    // If it is empty (default), maybe we allow it for now to avoid breaking existing?
-    // "Default: []" in schema.
-    // If I strictly enforce now, all existing profiles (empty array) will 404.
-    // I should probably not enforce if empty, OR I should have migrated data.
-    // Since I cannot migrate data easily here, I will check ONLY if the array is NOT empty.
-    // Wait, the goal is "Prevent showing profiles...".
-    // If I enforce it, I must ensure I don't break the site.
-    // Let's check if the locale is in the array OR if the array is empty (legacy behavior).
+    // STRICT LANGUAGE ISOLATION
+    // As per "Ultra-Detailed Architect Specification":
+    // If !celebrity.publishedLanguages.includes(locale.toUpperCase()), return null immediately.
+    // This assumes the migration has run and populated the array.
 
-    if (celebrity.publishedLanguages && celebrity.publishedLanguages.length > 0) {
-        if (!celebrity.publishedLanguages.includes(normalizedLocale)) {
-            // Return null to trigger 404 in UI
-            return null;
-        }
+    if (!celebrity.publishedLanguages.includes(normalizedLocale)) {
+        return null;
     }
 
     return mapCelebrityToDTO(celebrity, locale);
@@ -290,7 +271,11 @@ export async function searchCelebrities({
   locale
 }: SearchCelebritiesParams) {
   try {
-    const where: any = {};
+    const langEnum = locale.toUpperCase() as Language;
+
+    const where: any = {
+      publishedLanguages: { has: langEnum }
+    };
 
     if (query) {
       where.OR = [
@@ -305,7 +290,7 @@ export async function searchCelebrities({
             }
           }
         },
-        // Fallback for non-migrated data
+        // Fallback for non-migrated data (only if names match)
         { name: { contains: query, mode: 'insensitive' } }
       ];
     }

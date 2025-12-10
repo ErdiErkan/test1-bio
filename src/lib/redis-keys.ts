@@ -1,25 +1,42 @@
 // src/lib/redis-keys.ts
 
-// Key patterns for Redis to avoid typos and ensure consistency
+// DEFINITIVE REDIS KEY SCHEMA
+// As per "Ultra-Detailed Architect Specification"
 
 export const RedisKeys = {
-  // Rate limiting
-  rateLimitBoost: (ip: string, celebrityId: string) => `limit:boost:${ip}:${celebrityId}`,
+  // VARIABLES:
+  // {locale} -> always lowercase (e.g., 'en', 'tr')
+  // {period} -> 'daily', 'weekly', 'monthly', 'yearly', 'all_time'
+  // {dateKey} -> '2023-12-09', '2023-W49', '2023-12', '2023'
 
-  // Analytics - Views
-  statViews: (locale: string, period: string) => `stat:views:${locale}:${period}`,
+  // 1. COUNTERS (Pure counts for UI display)
+  statViews: (locale: string, period: string, dateKey: string) =>
+    `stat:views:${locale}:${period}:${dateKey}`,
 
-  // Analytics - Boosts
-  statBoosts: (locale: string, period: string) => `stat:boosts:${locale}:${period}`,
+  statBoosts: (locale: string, period: string, dateKey: string) =>
+    `stat:boosts:${locale}:${period}:${dateKey}`,
 
-  // Rankings
-  rankScore: (locale: string, period: string) => `rank:score:${locale}:${period}`,
+  // 2. LEADERBOARDS (Weighted Score: View=1, Boost=X)
+  rankScore: (locale: string, period: string, dateKey: string) =>
+    `rank:score:${locale}:${period}:${dateKey}`,
 
-  // Caching
-  cacheRank: (celebrityId: string, period: string) => `cache:rank:${celebrityId}:${period}`,
+  // 3. DIMENSIONAL RANKINGS (For specific filters)
+  rankGlobal: (locale: string, period: string, dateKey: string) =>
+    `rank:${locale}:global:${period}:${dateKey}`,
 
-  // Indices
+  rankCategory: (locale: string, slug: string, period: string, dateKey: string) =>
+    `rank:${locale}:category:${slug}:${period}:${dateKey}`,
+
+  rankZodiac: (locale: string, sign: string, period: string, dateKey: string) =>
+    `rank:${locale}:zodiac:${sign}:${period}:${dateKey}`,
+
+  rankBorn: (locale: string, year: number | string, period: string, dateKey: string) =>
+    `rank:${locale}:born:${year}:${period}:${dateKey}`,
+
+  // 4. UTILITY
   indexSlugs: (locale: string) => `index:${locale}:slugs`,
+
+  rateLimitBoost: (ip: string, celebrityId: string) => `limit:boost:${ip}:${celebrityId}`,
 };
 
 export const Periods = {

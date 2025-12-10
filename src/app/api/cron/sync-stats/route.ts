@@ -15,8 +15,12 @@ async function syncSlugs() {
     let totalSlugs = 0;
 
     for (const lang of languages) {
+        // STRICT: Only sync slugs if the celebrity actually supports this language
         const slugs = await prisma.celebrityTranslation.findMany({
-            where: { language: lang },
+            where: {
+                language: lang,
+                celebrity: { publishedLanguages: { has: lang } }
+            },
             select: { slug: true }
         });
 

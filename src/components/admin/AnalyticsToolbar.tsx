@@ -10,26 +10,28 @@ export default function AnalyticsToolbar() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
+    // Assuming locale is the first path segment (e.g. /en/admin/...)
     const locale = pathname.split('/')[1] || 'en';
 
+    // Local state for inputs to allow typing before navigating
     const [period, setPeriod] = useState(searchParams.get('period') || 'weekly');
     const [dimension, setDimension] = useState(searchParams.get('dimension') || 'global');
     const [value, setValue] = useState(searchParams.get('value') || '');
 
-    // Combobox State
+    // Combobox State for Category Search
     const [query, setQuery] = useState('');
     const [suggestions, setSuggestions] = useState<CategorySearchResult[]>([]);
     const [isSearching, startTransition] = useTransition();
     const [showSuggestions, setShowSuggestions] = useState(false);
 
-    // Sync with URL on mount/update
+    // Sync local state with URL when URL changes (e.g. Back button)
     useEffect(() => {
         setPeriod(searchParams.get('period') || 'weekly');
         setDimension(searchParams.get('dimension') || 'global');
         setValue(searchParams.get('value') || '');
     }, [searchParams]);
 
-    // Search Effect
+    // Handle Category Search Debounce
     useEffect(() => {
         if (dimension === 'category' && query.length >= 2) {
             const timer = setTimeout(() => {
@@ -42,18 +44,18 @@ export default function AnalyticsToolbar() {
             return () => clearTimeout(timer);
         } else {
             setSuggestions([]);
-            setShowSuggestions(false);
+            // Don't hide immediately if user is interacting
         }
     }, [query, dimension, locale]);
 
-    const handleFilter = (newValue?: string) => {
-        const val = newValue !== undefined ? newValue : value;
+    // Push changes to URL
+    const updateUrl = (newPeriod: string, newDimension: string, newValue: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('period', newPeriod);
+        params.set('dimension', newDimension);
 
-        const params = new URLSearchParams(searchParams);
-        params.set('period', period);
-        params.set('dimension', dimension);
-        if (val) {
-            params.set('value', val);
+        if (newDimension !== 'global' && newValue) {
+            params.set('value', newValue);
         } else {
             params.delete('value');
         }
@@ -61,23 +63,29 @@ export default function AnalyticsToolbar() {
         router.push(`${pathname}?${params.toString()}`);
     };
 
-    // Auto-submit on Dropdown Change
-    useEffect(() => {
-        // Only trigger if we are not changing dimension to 'category' which requires input
-        // If dimension changed to global, we trigger.
-        // If dimension changed to zodiac, we wait for zodiac selection (or it's handled in its own select)
+    const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newPeriod = e.target.value;
+        setPeriod(newPeriod);
+        updateUrl(newPeriod, dimension, value);
+    };
 
-        if (dimension === 'global') {
-             handleFilter('');
-        }
-        // For others, we wait for input/selection
-    }, [period, dimension]); // eslint-disable-line react-hooks/exhaustive-deps
+    const handleDimensionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newDimension = e.target.value;
+        setDimension(newDimension);
+        setValue(''); // Reset value
+        setQuery('');
+        updateUrl(period, newDimension, '');
+    };
 
-    const handleCategorySelect = (slug: string) => {
-        setValue(slug);
-        setQuery(''); // Or keep the name? Usually clearing query or setting it to name is fine.
+    const handleValueCommit = () => {
+        updateUrl(period, dimension, value);
+    };
+
+    const handleCategorySelect = (category: CategorySearchResult) => {
+        setValue(category.slug);
+        setQuery(category.name); // Show name in input
         setShowSuggestions(false);
-        handleFilter(slug);
+        updateUrl(period, dimension, category.slug);
     };
 
     return (
@@ -87,8 +95,8 @@ export default function AnalyticsToolbar() {
                 <label className="text-xs font-semibold text-gray-500 mb-1">{t('period')}</label>
                 <select
                     value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                    onChange={handlePeriodChange}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                     <option value="daily">{t('periods.daily')}</option>
                     <option value="weekly">{t('periods.weekly')}</option>
@@ -103,12 +111,8 @@ export default function AnalyticsToolbar() {
                 <label className="text-xs font-semibold text-gray-500 mb-1">{t('dimension')}</label>
                 <select
                     value={dimension}
-                    onChange={(e) => {
-                        setDimension(e.target.value);
-                        setValue(''); // Reset value on dimension change
-                        setQuery('');
-                    }}
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                    onChange={handleDimensionChange}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                     <option value="global">{t('dimensions.global')}</option>
                     <option value="category">{t('dimensions.category')}</option>
@@ -131,13 +135,9 @@ export default function AnalyticsToolbar() {
                             value={value}
                             onChange={(e) => {
                                 setValue(e.target.value);
-                                const params = new URLSearchParams(searchParams);
-                                params.set('period', period);
-                                params.set('dimension', dimension);
-                                params.set('value', e.target.value);
-                                router.push(`${pathname}?${params.toString()}`);
+                                updateUrl(period, dimension, e.target.value);
                             }}
-                            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-40"
+                            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-40 bg-white"
                         >
                             <option value="">Select...</option>
                             {['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'].map(z => (
@@ -148,28 +148,26 @@ export default function AnalyticsToolbar() {
                          <div className="relative w-64">
                             <input
                                 type="text"
-                                value={query || (value ? value : '')} // Show value if query empty?
+                                value={query}
                                 onChange={(e) => {
                                     setQuery(e.target.value);
-                                    if(e.target.value === '') {
-                                        setValue('');
-                                        // Optional: Clear filter immediately?
-                                    }
+                                    if(e.target.value === '') setValue('');
                                 }}
                                 onFocus={() => query.length >= 2 && setShowSuggestions(true)}
+                                // Delay blur to allow click on suggestion
                                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                                 placeholder="Search category..."
-                                className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
+                                className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full focus:ring-blue-500 focus:border-blue-500"
                             />
-                            {isSearching && <div className="absolute right-2 top-2 text-xs text-gray-400">...</div>}
+                            {isSearching && <div className="absolute right-2 top-2 text-xs text-gray-400 animate-pulse">...</div>}
 
                             {showSuggestions && suggestions.length > 0 && (
                                 <ul className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto z-50">
                                     {suggestions.map((cat) => (
                                         <li
                                             key={cat.slug}
-                                            onClick={() => handleCategorySelect(cat.slug)}
-                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                            onClick={() => handleCategorySelect(cat)}
+                                            className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700"
                                         >
                                             {cat.name}
                                         </li>
@@ -183,14 +181,14 @@ export default function AnalyticsToolbar() {
                                 type="number"
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
-                                onBlur={() => handleFilter()}
-                                onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
+                                onBlur={handleValueCommit}
+                                onKeyDown={(e) => e.key === 'Enter' && handleValueCommit()}
                                 placeholder="YYYY"
-                                className="border border-gray-300 rounded-md px-3 py-2 text-sm w-24"
+                                className="border border-gray-300 rounded-md px-3 py-2 text-sm w-24 focus:ring-blue-500 focus:border-blue-500"
                             />
                             <button
-                                onClick={() => handleFilter()}
-                                className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700"
+                                onClick={handleValueCommit}
+                                className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
                             >
                                 Go
                             </button>

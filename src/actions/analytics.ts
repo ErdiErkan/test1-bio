@@ -85,7 +85,7 @@ export async function recordInteraction(input: InteractionInput) {
         if (data.type === 'boost') {
             const headersList = await headers();
             const ip = headersList.get('x-forwarded-for') || 'unknown';
-            const rateLimitKey = RedisKeys.rateLimitBoost(ip, data.celebrityId);
+            const rateLimitKey = RedisKeys.rateLimit(ip, 'boost', data.celebrityId);
 
             const settings = await getSystemSettings();
             const isAllowed = await redis.set(rateLimitKey, '1', 'EX', settings.BOOST_COOLDOWN, 'NX');
@@ -106,7 +106,7 @@ export async function recordInteraction(input: InteractionInput) {
                 let score = 0;
                 if (data.type === 'view') {
                     score = 1;
-                    // Counters: Views
+                    // Counters: Views (With Date Keys)
                     pipeline.zincrby(RedisKeys.statViews(locale, Periods.DAILY, periods.daily), 1, data.celebrityId);
                     pipeline.zincrby(RedisKeys.statViews(locale, Periods.WEEKLY, periods.weekly), 1, data.celebrityId);
                     pipeline.zincrby(RedisKeys.statViews(locale, Periods.MONTHLY, periods.monthly), 1, data.celebrityId);
@@ -114,7 +114,7 @@ export async function recordInteraction(input: InteractionInput) {
                     pipeline.zincrby(RedisKeys.statViews(locale, Periods.ALL_TIME, 'all_time'), 1, data.celebrityId);
                 } else {
                     score = settings.BOOST_WEIGHT;
-                    // Counters: Boosts
+                    // Counters: Boosts (With Date Keys)
                     pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.DAILY, periods.daily), 1, data.celebrityId);
                     pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.WEEKLY, periods.weekly), 1, data.celebrityId);
                     pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.MONTHLY, periods.monthly), 1, data.celebrityId);
@@ -122,7 +122,7 @@ export async function recordInteraction(input: InteractionInput) {
                     pipeline.zincrby(RedisKeys.statBoosts(locale, Periods.ALL_TIME, 'all_time'), 1, data.celebrityId);
                 }
 
-                // Helper to add increments and set TTL
+                // Helper to add increments and set TTL for Rankings
                 const addRankIncrements = (
                     genKey: (p: string, d: string) => string
                 ) => {
@@ -149,11 +149,10 @@ export async function recordInteraction(input: InteractionInput) {
                     // All Time
                     const allTimeKey = genKey(Periods.ALL_TIME, 'all_time');
                     pipeline.zincrby(allTimeKey, score, data.celebrityId);
-                    // No expire for all_time or very long? Let's treat as LONG_TERM
                     pipeline.expire(allTimeKey, TTL.LONG_TERM);
                 };
 
-                // --- 4. Rank Updates ---
+                // --- 4. Rank Updates (Leaderboards & Dimensions) ---
 
                 // Rank Score (Leaderboards)
                 addRankIncrements((p, d) => RedisKeys.rankScore(locale, p, d));
@@ -168,7 +167,7 @@ export async function recordInteraction(input: InteractionInput) {
 
                 // Zodiac Rank
                 if (data.zodiac) {
-                    addRankIncrements((p, d) => RedisKeys.rankZodiac(locale, data.zodiac!.toLowerCase(), p, d));
+                    addRankIncrements((p, d) => RedisKeys.rankZodiac(locale, data.zodiac!, p, d));
                 }
 
                 // Birth Year Rank
@@ -237,8 +236,8 @@ export async function getDynamicRankings(
 
                 // 3. Zodiac Ranks
                 if (options?.zodiac) {
-                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac.toLowerCase(), Periods.MONTHLY, periods.monthly), celebrityId);
-                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac.toLowerCase(), Periods.YEARLY, periods.yearly), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac, Periods.MONTHLY, periods.monthly), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac, Periods.YEARLY, periods.yearly), celebrityId);
                 }
 
                 // 4. Birth Year Ranks
@@ -441,18 +440,11 @@ export async function getRandomCelebrity(locale: string): Promise<string | null>
  */
 export async function getMonthlyBoostRank(celebrityId: string, locale: string) {
     const normalizedLocale = locale.toLowerCase();
-    // Cache this? Badges don't need to be realtime instant, but unstable_cache is good.
-    // Let's cache for 5 mins similar to trending.
+
     const getRank = unstable_cache(async () => {
         const now = new Date();
         const periods = getPeriodKeys(now);
-        // Spec says: "Logic: zrevrank on rank:{locale}:global:monthly:{current_month}"
-        // But wait, the prompt says "Monthly Rank Badge" ... "Logic: zrevrank on rank:{locale}:global:monthly:{current_month}"
-        // Is this Boost Rank or Global Rank? Prompt title says "Monthly Rank Badge" and logic refers to "rank:{locale}:global:monthly".
-        // "rank:{locale}:global" uses Score (Views + Boosts).
-        // The prompt description says "Show a badge... if... in the top 100".
-        // OK, so it's based on the Global Rank Score.
-
+        // Uses Global Rank Key
         const key = RedisKeys.rankGlobal(normalizedLocale, Periods.MONTHLY, periods.monthly);
         const rank = await redis.zrevrank(key, celebrityId);
 

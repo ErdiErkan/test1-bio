@@ -1,16 +1,16 @@
 import { redis } from '@/lib/redis';
-import { getPeriodKeys, parsePeriodKey } from '@/lib/date-utils';
+import { getPeriodKeys } from '@/lib/date-utils';
 import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/db';
 import Image from 'next/image';
 import AnalyticsToolbar from '@/components/admin/AnalyticsToolbar';
-import { RedisKeys } from '@/lib/redis-keys';
+import { RedisKeys, Periods } from '@/lib/redis-keys';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAnalyticsPage({ searchParams, params }: { searchParams: Promise<{ [key: string]: string | undefined }>, params: Promise<{ locale: string }> }) {
     const { locale: rawLocale } = await params;
-    const locale = rawLocale.toLowerCase(); // Ensure locale is always lowercase for Redis keys
+    const locale = rawLocale.toLowerCase();
     const query = await searchParams;
     const t = await getTranslations('analytics');
 
@@ -22,30 +22,23 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     const dimension = query.dimension || 'global';
     const value = query.value || '';
 
-    // --- HELPER: Fetch Stats for a Period ---
+    // --- HELPER: Fetch Stats for a Period (For Top Cards) ---
     const fetchStats = async (periodType: string, periodKey: string) => {
         let key = '';
-        // Using RedisKeys helper implicitly by following the pattern, or explicit construction matching the schema
-        // Schema: rank:{locale}:global:{period}:{dateKey}
+
+        // Ensure dateKey is 'all_time' if period is 'all_time'
+        const dateKey = periodType === 'all_time' ? 'all_time' : periodKey;
 
         if (dimension === 'global') {
-            key = RedisKeys.rankGlobal(locale, periodType, periodKey);
+            key = RedisKeys.rankGlobal(locale, periodType, dateKey);
         } else if (dimension === 'category' && value) {
-            key = RedisKeys.rankCategory(locale, value, periodType, periodKey);
+            key = RedisKeys.rankCategory(locale, value, periodType, dateKey);
         } else if (dimension === 'zodiac' && value) {
-            key = RedisKeys.rankZodiac(locale, value.toLowerCase(), periodType, periodKey);
+            key = RedisKeys.rankZodiac(locale, value.toLowerCase(), periodType, dateKey);
         } else if (dimension === 'born' && value) {
-            key = RedisKeys.rankBorn(locale, value, periodType, periodKey);
+            key = RedisKeys.rankBorn(locale, value, periodType, dateKey);
         } else {
              return [];
-        }
-
-        // Handle "all_time" special case (dateKey passed as 'all_time' usually)
-        if (periodType === 'all_time') {
-             // RedisKeys.rankGlobal(locale, 'all_time', 'all_time') -> rank:en:global:all_time:all_time
-             // But verify if we need that or just 'rank:en:global:all_time'
-             // recordInteraction uses: genKey(Periods.ALL_TIME, 'all_time') which uses RedisKeys.rankGlobal
-             // so it is consistent.
         }
 
         const res = await redis.zrevrange(key, 0, 0, 'WITHSCORES'); // Top 1 only for summary cards
@@ -55,45 +48,43 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
         return [];
     };
 
-    // Parallel Fetching for Dashboard Cards (Weekly, Monthly, Yearly)
-    // We want to show "Top Celebrity" for these 3 periods side-by-side if in global view?
-    // Or just fetch the SELECTED period data for the table, and parallel fetch summaries?
-    // The requirement says: "Responsive 3-Column Analytics Dashboard... Parallel Fetching... Weekly, Monthly, Yearly data concurrently"
-
-    // Let's fetch Top 1 for Weekly, Monthly, Yearly to show in cards at top.
+    // Parallel Fetching for Dashboard Cards
     const results = await Promise.allSettled([
-        fetchStats('weekly', periods.weekly),
-        fetchStats('monthly', periods.monthly),
-        fetchStats('yearly', periods.yearly)
+        fetchStats(Periods.WEEKLY, periods.weekly),
+        fetchStats(Periods.MONTHLY, periods.monthly),
+        fetchStats(Periods.YEARLY, periods.yearly)
     ]);
 
     const weeklyTop = results[0].status === 'fulfilled' ? results[0].value : [];
     const monthlyTop = results[1].status === 'fulfilled' ? results[1].value : [];
     const yearlyTop = results[2].status === 'fulfilled' ? results[2].value : [];
 
-    // Now fetch the MAIN list based on selected period for the Table
-    let mainListKey = '';
-    let timeSuffix = '';
+    // --- MAIN LEADERBOARD ---
 
-    // Construct Main List Key using RedisKeys helper for consistency
-    let pKey = 'all_time';
-    if (period !== 'all_time') {
-        pKey = periods[period as keyof typeof periods];
+    // Determine DateKey for the selected period
+    let mainDateKey = 'all_time';
+    if (period !== 'all_time' && period in periods) {
+        mainDateKey = periods[period as keyof typeof periods];
+    } else if (period !== 'all_time') {
+        // Fallback or error if period is invalid? Default to weekly
+        mainDateKey = periods.weekly;
     }
 
+    let mainListKey = '';
+
     if (dimension === 'global') {
-        mainListKey = RedisKeys.rankGlobal(locale, period, pKey);
+        mainListKey = RedisKeys.rankGlobal(locale, period, mainDateKey);
     } else if (dimension === 'category' && value) {
-        mainListKey = RedisKeys.rankCategory(locale, value, period, pKey);
+        mainListKey = RedisKeys.rankCategory(locale, value, period, mainDateKey);
     } else if (dimension === 'zodiac' && value) {
-        mainListKey = RedisKeys.rankZodiac(locale, value.toLowerCase(), period, pKey);
+        mainListKey = RedisKeys.rankZodiac(locale, value.toLowerCase(), period, mainDateKey);
     } else if (dimension === 'born' && value) {
-        mainListKey = RedisKeys.rankBorn(locale, value, period, pKey);
+        mainListKey = RedisKeys.rankBorn(locale, value, period, mainDateKey);
     }
 
     const leaderboard = await redis.zrevrange(mainListKey, 0, 49, 'WITHSCORES');
 
-    // Parse Leaderboard IDs and Scores (Total Score)
+    // Parse Leaderboard IDs and Scores
     const parsedLeaderboard: { id: string; score: number; rank: number; views?: number; boosts?: number }[] = [];
     if (leaderboard && leaderboard.length > 0) {
         for (let i = 0; i < leaderboard.length; i += 2) {
@@ -105,32 +96,17 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
         }
     }
 
-    // ENRICHMENT: Fetch View and Boost Counts specifically
-    // We need to construct the keys for stats
-    // Logic: stat:views:{locale}:{period}:{dateKey}
-
-    // Determine Period and DateKey
-    let statPeriod = period === 'all_time' ? 'all_time' : period;
-    let statDateKey = 'all_time';
-
-    if (period !== 'all_time') {
-         // periods object has keys: daily, weekly, monthly, yearly
-         // period string is one of them
-         statDateKey = periods[period as keyof typeof periods];
-    }
-
-    // Pipeline fetch
+    // ENRICHMENT: Fetch View and Boost Counts specifically using stat:views/stat:boosts keys
     const statsPipeline = redis.pipeline();
     parsedLeaderboard.forEach(item => {
-        const viewKey = RedisKeys.statViews(locale, statPeriod, statDateKey);
-        const boostKey = RedisKeys.statBoosts(locale, statPeriod, statDateKey);
+        const viewKey = RedisKeys.statViews(locale, period, mainDateKey);
+        const boostKey = RedisKeys.statBoosts(locale, period, mainDateKey);
         statsPipeline.zscore(viewKey, item.id);
         statsPipeline.zscore(boostKey, item.id);
     });
 
     const statsResults = await statsPipeline.exec();
 
-    // Map stats back to leaderboard
     if (statsResults) {
         let resultIdx = 0;
         parsedLeaderboard.forEach(item => {
@@ -142,7 +118,7 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
         });
     }
 
-    // Collect all IDs to fetch (Main list + Card Tops)
+    // Collect all IDs to fetch
     const allIds = new Set<string>();
     parsedLeaderboard.forEach(i => allIds.add(i.id));
     weeklyTop.forEach(i => allIds.add(i.id));

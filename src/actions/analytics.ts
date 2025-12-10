@@ -5,8 +5,9 @@ import { redis } from '@/lib/redis';
 import { prisma } from '@/lib/db';
 import { getPeriodKeys } from '@/lib/date-utils';
 import { unstable_cache } from 'next/cache';
-import { RedisKeys } from '@/lib/redis-keys';
+import { RedisKeys, Periods } from '@/lib/redis-keys';
 import { headers } from 'next/headers';
+import { after } from 'next/server'; // Non-blocking writes
 
 // Validation Schema for Interaction
 const interactionSchema = z.object({
@@ -24,7 +25,6 @@ export type TrendingCelebrity = {
     id: string;
     score: number;
     rank: number;
-    // Minimal data needed for the card
     name: string;
     slug: string;
     profession?: string | null;
@@ -32,14 +32,16 @@ export type TrendingCelebrity = {
     images?: { url: string; isMain: boolean }[];
 };
 
-const POINTS = {
-    view: 1,
-    boost: 10,
-} as const;
-
-// Default config values (fallback)
+// Default config values
 const DEFAULT_BOOST_COOLDOWN = 60; // seconds
 const DEFAULT_BOOST_WEIGHT = 10;
+
+// TTL Constants
+const TTL = {
+    DAILY: 7 * 24 * 60 * 60, // 7 days
+    WEEKLY: 30 * 24 * 60 * 60, // 30 days
+    LONG_TERM: 5 * 365 * 24 * 60 * 60, // 5 Years
+};
 
 async function getSystemSettings() {
     try {
@@ -71,29 +73,20 @@ async function getSystemSettings() {
 
 /**
  * Records a user interaction (view or boost) in Redis using a Write-Behind pattern.
- * Increments multiple ZSET keys concurrently via pipeline.
  */
 export async function recordInteraction(input: InteractionInput) {
     try {
         // 1. Validate Input
         const data = interactionSchema.parse(input);
-        const now = new Date();
-        const periods = getPeriodKeys(now);
+        const locale = data.locale.toLowerCase();
 
-        // 2. Rate Limiting for Boosts
+        // 2. Rate Limiting for Boosts (Blocking Check)
         if (data.type === 'boost') {
             const headersList = await headers();
             const ip = headersList.get('x-forwarded-for') || 'unknown';
-            const rateLimitKey = RedisKeys.rateLimitBoost(ip, data.celebrityId);
-
-            // Get dynamic cooldown from DB (cached or direct)
-            // For performance, we might want to cache this in memory or Redis too,
-            // but for now let's fetch or use defaults.
-            // A better approach is to not block the write on DB read.
-            // So we'll try to set with NX EX.
+            const rateLimitKey = RedisKeys.rateLimit(ip, 'boost', data.celebrityId);
 
             const settings = await getSystemSettings();
-
             const isAllowed = await redis.set(rateLimitKey, '1', 'EX', settings.BOOST_COOLDOWN, 'NX');
 
             if (!isAllowed) {
@@ -101,80 +94,131 @@ export async function recordInteraction(input: InteractionInput) {
             }
         }
 
-        // 3. Prepare Pipeline
-        const pipeline = redis.pipeline();
+        // 3. Background Processing (Non-blocking)
+        after(async () => {
+            try {
+                const now = new Date();
+                const periods = getPeriodKeys(now);
+                const pipeline = redis.pipeline();
+                const settings = await getSystemSettings();
 
-        // Determine score weight
-        let score = 0;
-        if (data.type === 'view') {
-            score = 1;
-            // Record View
-            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.daily), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.weekly), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.monthly), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statViews(data.locale, periods.yearly), 1, data.celebrityId);
-        } else {
-            // Get weight for boost
-            // We can fetch it again or assume the one from rate limit check is close enough
-            const settings = await getSystemSettings();
-            score = settings.BOOST_WEIGHT;
+                // 3.1 Fetch Celebrity Metadata from DB if missing
+                // This guarantees filters work even if client just sends { id, type }
+                let categories: string[] = data.categorySlug ? [data.categorySlug] : [];
+                let zodiac = data.zodiac;
+                let birthYear = data.birthYear;
 
-            // Record Boost
-            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.daily), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.weekly), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.monthly), 1, data.celebrityId);
-            pipeline.zincrby(RedisKeys.statBoosts(data.locale, periods.yearly), 1, data.celebrityId);
-        }
+                const celebrity = await prisma.celebrity.findUnique({
+                    where: { id: data.celebrityId },
+                    select: {
+                        zodiac: true,
+                        birthDate: true,
+                        categories: {
+                            select: { 
+                                slug: true,
+                                translations: {
+                                    where: { language: locale.toUpperCase() as any },
+                                    select: { slug: true }
+                                }
+                            }
+                        }
+                    }
+                });
 
-        // Helper to add increments to pipeline
-        const addIncrements = (keyPrefix: string) => {
-            // Temporal Ranks
-            pipeline.zincrby(`${keyPrefix}:daily:${periods.daily}`, score, data.celebrityId);
-            pipeline.zincrby(`${keyPrefix}:weekly:${periods.weekly}`, score, data.celebrityId);
-            pipeline.zincrby(`${keyPrefix}:monthly:${periods.monthly}`, score, data.celebrityId);
-            pipeline.zincrby(`${keyPrefix}:yearly:${periods.yearly}`, score, data.celebrityId);
+                if (celebrity) {
+                    // Normalize Zodiac
+                    if (!zodiac && celebrity.zodiac) zodiac = celebrity.zodiac.toLowerCase();
+                    
+                    // Normalize Birth Year
+                    if (!birthYear && celebrity.birthDate) birthYear = celebrity.birthDate.getFullYear();
+                    
+                    // Normalize Categories (Get ALL categories for this celeb)
+                    const dbCategories = celebrity.categories.map(c => {
+                        const t = c.translations[0];
+                        return t?.slug || c.slug;
+                    });
+                    // Merge categories, avoid duplicates
+                    categories = Array.from(new Set([...categories, ...dbCategories]));
+                }
 
-            // All Time Rank
-            pipeline.zincrby(`${keyPrefix}:all_time`, score, data.celebrityId);
-        };
+                // 3.2 Determine Score
+                const score = data.type === 'view' ? 1 : settings.BOOST_WEIGHT;
 
-        // --- STRATEGY: Define Key Patterns ---
+                // 3.3 Counters (Stat Views/Boosts)
+                const statKeyGen = data.type === 'view' ? RedisKeys.statViews : RedisKeys.statBoosts;
+                
+                [Periods.DAILY, Periods.WEEKLY, Periods.MONTHLY, Periods.YEARLY, Periods.ALL_TIME].forEach(p => {
+                    const dKey = p === Periods.ALL_TIME ? 'all_time' : periods[p as keyof typeof periods];
+                    pipeline.zincrby(statKeyGen(locale, p, dKey), 1, data.celebrityId);
+                });
 
-        // 1. Global Rank (No Locale)
-        addIncrements(`rank:global`);
+                // 3.4 Helper to add increments and set TTL for Rankings
+                const addRankIncrements = (genKey: (p: string, d: string) => string) => {
+                    // Daily
+                    const dailyKey = genKey(Periods.DAILY, periods.daily);
+                    pipeline.zincrby(genKey(Periods.DAILY, periods.daily), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.DAILY, periods.daily), 7 * 24 * 60 * 60); // TTL
 
-        // 2. Local Rank (Locale Aware)
-        addIncrements(`rank:${data.locale}:global`);
+                    // Weekly
+                    const weeklyKey = genKey(Periods.WEEKLY, periods.weekly);
+                    pipeline.zincrby(genKey(Periods.WEEKLY, periods.weekly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.WEEKLY, periods.weekly), 30 * 24 * 60 * 60); // TTL
 
-        // 3. Category Rank
-        if (data.categorySlug) {
-            addIncrements(`rank:${data.locale}:category:${data.categorySlug}`);
-        }
+                    // Monthly
+                    const monthlyKey = genKey(Periods.MONTHLY, periods.monthly);
+                    pipeline.zincrby(genKey(Periods.MONTHLY, periods.monthly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.MONTHLY, periods.monthly), 30 * 24 * 60 * 60); // TTL
 
-        // 4. Zodiac Rank
-        if (data.zodiac) {
-            addIncrements(`rank:${data.locale}:zodiac:${data.zodiac.toLowerCase()}`);
-        }
+                    // Yearly
+                    const yearlyKey = genKey(Periods.YEARLY, periods.yearly);
+                    pipeline.zincrby(genKey(Periods.YEARLY, periods.yearly), score, data.celebrityId);
+                    pipeline.expire(genKey(Periods.YEARLY, periods.yearly), 30 * 24 * 60 * 60); // TTL
 
-        // 5. Birth Year Rank
-        if (data.birthYear) {
-            addIncrements(`rank:${data.locale}:born:${data.birthYear}`);
-        }
+                    // All Time
+                    const allTimeKey = genKey(Periods.ALL_TIME, 'all_time');                   
+                    pipeline.zincrby(allTimeKey, score, data.celebrityId);
+                    pipeline.expire(allTimeKey, TTL.LONG_TERM);
+                };
 
-        await pipeline.exec();
+                // --- 4. Rank Updates (Leaderboards & Dimensions) ---
+
+                // Rank Score (Main Leaderboards)
+                addRankIncrements((p, d) => RedisKeys.rankScore(locale, p, d));
+
+                // Global Rank (Filtered by Locale)
+                addRankIncrements((p, d) => RedisKeys.rankGlobal(locale, p, d));
+
+                // Category Rank (For ALL categories this celeb belongs to)
+                categories.forEach(slug => {
+                    if (slug) addRankIncrements((p, d) => RedisKeys.rankCategory(locale, slug, p, d));
+                });
+
+                // Zodiac Rank
+                if (zodiac) {
+                    addRankIncrements((p, d) => RedisKeys.rankZodiac(locale, zodiac!, p, d));
+                }
+
+                // Birth Year Rank
+                if (birthYear) {
+                    addRankIncrements((p, d) => RedisKeys.rankBorn(locale, birthYear!, p, d));
+                }
+
+                await pipeline.exec();
+            } catch (err) {
+                console.error('[Analytics] Background interaction recording failed:', err);
+            }
+        });
+
         return { success: true };
 
     } catch (error) {
         console.error('[Analytics] Failed to record interaction:', error);
-        // Soft fail: return false but don't crash app
         return { success: false, error: 'Analytics Error' };
     }
 }
 
 /**
  * Fetches the current real-time rankings for a celebrity.
- * Used for "Dynamic Ranking Badges".
- * CACHED via unstable_cache to protect Redis.
  */
 export async function getDynamicRankings(
     celebrityId: string,
@@ -185,17 +229,18 @@ export async function getDynamicRankings(
         birthYear?: number;
     }
 ) {
+    const normalizedLocale = locale.toLowerCase();
+
     // Create a unique cache key based on inputs
     const cacheKeyParts = [
         'rankings',
         celebrityId,
-        locale,
+        normalizedLocale,
         options?.categorySlug || 'no-cat',
         options?.zodiac || 'no-zodiac',
         String(options?.birthYear || 'no-year')
     ];
 
-    // Wrap the logic in unstable_cache
     const getCachedRankings = unstable_cache(
         async () => {
             const now = new Date();
@@ -205,28 +250,28 @@ export async function getDynamicRankings(
                 const pipeline = redis.pipeline();
 
                 // 1. Global Local Daily/Weekly/Monthly
-                pipeline.zrevrank(`rank:${locale}:global:daily:${periods.daily}`, celebrityId);
-                pipeline.zrevrank(`rank:${locale}:global:weekly:${periods.weekly}`, celebrityId);
-                pipeline.zrevrank(`rank:${locale}:global:monthly:${periods.monthly}`, celebrityId);
-                pipeline.zrevrank(`rank:${locale}:global:yearly:${periods.yearly}`, celebrityId);
+                pipeline.zrevrank(RedisKeys.rankGlobal(normalizedLocale, Periods.DAILY, periods.daily), celebrityId);
+                pipeline.zrevrank(RedisKeys.rankGlobal(normalizedLocale, Periods.WEEKLY, periods.weekly), celebrityId);
+                pipeline.zrevrank(RedisKeys.rankGlobal(normalizedLocale, Periods.MONTHLY, periods.monthly), celebrityId);
+                pipeline.zrevrank(RedisKeys.rankGlobal(normalizedLocale, Periods.YEARLY, periods.yearly), celebrityId);
 
-                // 2. Category Ranks (if provided)
+                // 2. Category Ranks
                 if (options?.categorySlug) {
-                    pipeline.zrevrank(`rank:${locale}:category:${options.categorySlug}:daily:${periods.daily}`, celebrityId);
-                    pipeline.zrevrank(`rank:${locale}:category:${options.categorySlug}:weekly:${periods.weekly}`, celebrityId);
-                    pipeline.zrevrank(`rank:${locale}:category:${options.categorySlug}:monthly:${periods.monthly}`, celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankCategory(normalizedLocale, options.categorySlug, Periods.DAILY, periods.daily), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankCategory(normalizedLocale, options.categorySlug, Periods.WEEKLY, periods.weekly), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankCategory(normalizedLocale, options.categorySlug, Periods.MONTHLY, periods.monthly), celebrityId);
                 }
 
-                // 3. Zodiac Ranks (if provided)
+                // 3. Zodiac Ranks
                 if (options?.zodiac) {
-                    pipeline.zrevrank(`rank:${locale}:zodiac:${options.zodiac.toLowerCase()}:monthly:${periods.monthly}`, celebrityId);
-                    pipeline.zrevrank(`rank:${locale}:zodiac:${options.zodiac.toLowerCase()}:yearly:${periods.yearly}`, celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac, Periods.MONTHLY, periods.monthly), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankZodiac(normalizedLocale, options.zodiac, Periods.YEARLY, periods.yearly), celebrityId);
                 }
 
-                // 4. Birth Year Ranks (if provided)
+                // 4. Birth Year Ranks
                 if (options?.birthYear) {
-                    pipeline.zrevrank(`rank:${locale}:born:${options.birthYear}:yearly:${periods.yearly}`, celebrityId);
-                    pipeline.zrevrank(`rank:${locale}:born:${options.birthYear}:all_time`, celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankBorn(normalizedLocale, options.birthYear, Periods.YEARLY, periods.yearly), celebrityId);
+                    pipeline.zrevrank(RedisKeys.rankBorn(normalizedLocale, options.birthYear, Periods.ALL_TIME, 'all_time'), celebrityId);
                 }
 
                 const results = await pipeline.exec();
@@ -236,7 +281,7 @@ export async function getDynamicRankings(
                 const getRank = (index: number) => {
                     const [err, res] = results[index];
                     if (err || res === null) return null;
-                    return (res as number) + 1; // Convert 0-index to 1-rank
+                    return (res as number) + 1;
                 };
 
                 let idx = 0;
@@ -267,9 +312,9 @@ export async function getDynamicRankings(
                 return null;
             }
         },
-        cacheKeyParts, // Key for the cache
+        cacheKeyParts,
         {
-            revalidate: 60, // Cache for 60 seconds
+            revalidate: 60,
             tags: ['analytics', `analytics:${celebrityId}`]
         }
     );
@@ -279,49 +324,36 @@ export async function getDynamicRankings(
 
 /**
  * Fetches "Trending" celebrities for the Homepage.
- * Logic:
- * 1. Try "Weekly" Global Rank (Most relevant).
- * 2. If < 5 items, fallback to "Monthly".
- * 3. Populate details from Postgres.
- * 4. Cache for 5 minutes (300s).
+ * Source of Truth: rank:score:{locale}:weekly:{current_week}
  */
 export async function getTrendingCelebrities(locale: string) {
+    const normalizedLocale = locale.toLowerCase();
+
     const getTrending = unstable_cache(
         async (): Promise<TrendingCelebrity[]> => {
             const now = new Date();
             const periods = getPeriodKeys(now);
 
             let results: string[] = [];
-            // 1. Try Weekly
-            let redisKey = `rank:${locale}:global:weekly:${periods.weekly}`;
-            results = await redis.zrevrange(redisKey, 0, 11, 'WITHSCORES'); // Top 12
 
-            // 2. Fallback to Monthly if not enough data
-            if (!results || results.length < 10) {
-                redisKey = `rank:${locale}:global:monthly:${periods.monthly}`;
-                const monthlyResults = await redis.zrevrange(redisKey, 0, 11, 'WITHSCORES');
+            // 1. Try Weekly Score
+            let redisKey = RedisKeys.rankScore(normalizedLocale, Periods.WEEKLY, periods.weekly);
+            results = await redis.zrevrange(redisKey, 0, 11, 'WITHSCORES');
 
-                // Merge logic: ensure uniqueness if needed, but for fallback usually just replacing is safer/cleaner
-                // If weekly was empty, just use monthly.
-                if (results.length === 0) {
-                    results = monthlyResults;
-                } else if (monthlyResults.length > 0) {
-                    // Combine? Usually "Trending" falling back to monthly is better than mixing 
-                    // because scores are on different scales (weekly vs monthly views).
-                    // So if weekly is "too weak" (e.g. < 5 items), purely switch to monthly
-                    if (results.length / 2 < 5) results = monthlyResults;
-                }
+            // 2. Fallback to Monthly if < 5 items
+            if (!results || (results.length / 2) < 5) {
+                redisKey = RedisKeys.rankScore(normalizedLocale, Periods.MONTHLY, periods.monthly);
+                results = await redis.zrevrange(redisKey, 0, 11, 'WITHSCORES');
             }
 
-            // 3. Fallback to All Time if still empty (Brand new locale?)
-            if (!results || results.length === 0) {
-                // Absolute last resort: Global non-locale
-                results = await redis.zrevrange(`rank:global:all_time`, 0, 11, 'WITHSCORES');
+            // 3. Fallback to All Time Score if < 5 items
+            if (!results || (results.length / 2) < 5) {
+                 redisKey = RedisKeys.rankScore(normalizedLocale, Periods.ALL_TIME, 'all_time');
+                 results = await redis.zrevrange(redisKey, 0, 11, 'WITHSCORES');
             }
 
-            if (results.length === 0) return [];
+            if (!results || results.length === 0) return [];
 
-            // Parse Redis Results: [id, score, id, score...]
             const trendingItems = [];
             for (let i = 0; i < results.length; i += 2) {
                 trendingItems.push({
@@ -332,9 +364,12 @@ export async function getTrendingCelebrities(locale: string) {
             }
 
             try {
-                // Fetch details from Prisma
+                // Fetch details from Prisma with STRICT Language Filtering
                 const dbCelebrities = await prisma.celebrity.findMany({
-                    where: { id: { in: trendingItems.map(i => i.id) } },
+                    where: {
+                        id: { in: trendingItems.map(i => i.id) },
+                        publishedLanguages: { has: locale.toUpperCase() }
+                    },
                     select: {
                         id: true,
                         name: true,
@@ -352,7 +387,7 @@ export async function getTrendingCelebrities(locale: string) {
                 // Map DB details back to Rank Order
                 const completeList = trendingItems.map(item => {
                     const details = dbCelebrities.find(c => c.id === item.id);
-                    if (!details) return null; // Should not happen often unless deleted
+                    if (!details) return null;
 
                     const t = details.translations[0];
 
@@ -361,7 +396,6 @@ export async function getTrendingCelebrities(locale: string) {
                         name: t?.name || details.name,
                         profession: t?.profession || details.profession,
                         slug: t?.slug || details.slug,
-                        // Prefer images relation
                         image: details.images?.[0]?.url || details.image
                     };
                 }).filter(Boolean) as TrendingCelebrity[];
@@ -369,15 +403,14 @@ export async function getTrendingCelebrities(locale: string) {
                 return completeList;
 
             } catch (error) {
-                console.error('[Analytics] Failed to fetch trending details from DB:', error);
-                // Return empty list so page doesn't crash, it just shows empty state
+                console.error('[Analytics] Failed to fetch trending details:', error);
                 return [];
             }
         },
-        ['trending-celebrities', locale], // Cache Key
+        ['trending-celebrities', normalizedLocale],
         {
             revalidate: 300, // 5 minutes
-            tags: ['trending', `trending-${locale}`]
+            tags: ['trending', `trending-${normalizedLocale}`]
         }
     );
 
@@ -388,32 +421,69 @@ export async function getTrendingCelebrities(locale: string) {
  * Gets a random celebrity slug for instant redirection.
  */
 export async function getRandomCelebrity(locale: string): Promise<string | null> {
-  try {
-      // 1. Try Redis Set
-      const slug = await redis.srandmember(RedisKeys.indexSlugs(locale));
-      if (slug) return slug;
+    const normalizedLocale = locale.toLowerCase();
+    try {
+        // 1. Try Redis Set
+        const slug = await redis.srandmember(RedisKeys.indexSlugs(normalizedLocale));
+        if (slug) return slug;
 
-      // 2. Fallback to DB (heavy)
-      const count = await prisma.celebrity.count();
-      const skip = Math.floor(Math.random() * count);
-      const randomCeleb = await prisma.celebrity.findFirst({
-          skip: skip,
-          select: {
-              slug: true,
-              translations: {
-                  where: { language: locale.toUpperCase() as any },
-                  select: { slug: true }
-              }
-          }
-      });
+        // 2. Fallback to DB
+        const count = await prisma.celebrity.count({
+            where: {
+                publishedLanguages: { has: locale.toUpperCase() }
+            }
+        });
 
-      if (!randomCeleb) return null;
+        if (count === 0) return null;
 
-      const t = randomCeleb.translations[0];
-      return t?.slug || randomCeleb.slug;
+        const skip = Math.floor(Math.random() * count);
+        const randomCeleb = await prisma.celebrity.findFirst({
+            where: {
+                publishedLanguages: { has: locale.toUpperCase() }
+            },
+            skip: skip,
+            select: {
+                slug: true,
+                translations: {
+                    where: { language: locale.toUpperCase() as any },
+                    select: { slug: true }
+                }
+            }
+        });
 
-  } catch (error) {
-      console.error('[Analytics] Failed to get random celebrity:', error);
-      return null;
-  }
+        if (!randomCeleb) return null;
+
+        const t = randomCeleb.translations[0];
+        return t?.slug || randomCeleb.slug;
+
+    } catch (error) {
+        console.error('[Analytics] Failed to get random celebrity:', error);
+        return null;
+    }
+}
+
+/**
+ * Gets the Monthly Boost Rank for a badge.
+ * Returns rank + 1 if in top 100, else null.
+ */
+export async function getMonthlyBoostRank(celebrityId: string, locale: string) {
+    const normalizedLocale = locale.toLowerCase();
+
+    const getRank = unstable_cache(async () => {
+        const now = new Date();
+        const periods = getPeriodKeys(now);
+        // Uses Global Rank Key
+        const key = RedisKeys.rankGlobal(normalizedLocale, Periods.MONTHLY, periods.monthly);
+        const rank = await redis.zrevrank(key, celebrityId);
+
+        if (rank !== null && rank < 100) {
+            return rank + 1;
+        }
+        return null;
+    }, ['monthly-rank', celebrityId, normalizedLocale], {
+        revalidate: 300,
+        tags: [`monthly-rank-${celebrityId}`]
+    });
+
+    return getRank();
 }

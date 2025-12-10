@@ -4,7 +4,7 @@ import type { SocialPlatform, CelebrityImage } from '@/lib/types'
 import ImageCarousel from './ImageCarousel'
 // ✅ DÜZELTME: Hook'lar yerine server-side fonksiyonları import ediyoruz
 import { getTranslations, getLocale } from 'next-intl/server'
-import { getDynamicRankings } from '@/actions/analytics'
+import { getDynamicRankings, getMonthlyBoostRank } from '@/actions/analytics'
 import { BoostButton } from './BoostButton'
 import { RankingBadgeList } from './RankingBadgeList'
 
@@ -217,6 +217,9 @@ export default async function CelebrityHeader({ celebrity }: CelebrityHeaderProp
     birthYear: birthYear
   });
 
+  // Fetch Monthly Rank for Badge
+  const monthlyRank = await getMonthlyBoostRank(celebrity.id, locale);
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
       <div className="md:flex">
@@ -226,6 +229,7 @@ export default async function CelebrityHeader({ celebrity }: CelebrityHeaderProp
             images={carouselImages}
             celebrityName={celebrity.name}
             fallbackLetter={celebrity.name.charAt(0).toUpperCase()}
+            monthlyRank={monthlyRank}
           />
         </div>
 

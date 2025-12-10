@@ -1,15 +1,21 @@
 import { redis } from '@/lib/redis';
-import { getPeriodKeys, parsePeriodKey } from '@/lib/date-utils';
+import { getPeriodKeys } from '@/lib/date-utils';
 import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/db';
 import Image from 'next/image';
 import AnalyticsToolbar from '@/components/admin/AnalyticsToolbar';
-import { RedisKeys } from '@/lib/redis-keys';
+import { RedisKeys, Periods } from '@/lib/redis-keys';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminAnalyticsPage({ searchParams, params }: { searchParams: Promise<{ [key: string]: string | undefined }>, params: Promise<{ locale: string }> }) {
-    const { locale } = await params;
+type Props = {
+    searchParams: Promise<{ [key: string]: string | undefined }>;
+    params: Promise<{ locale: string }>;
+};
+
+export default async function AdminAnalyticsPage({ searchParams, params }: Props) {
+    const { locale: rawLocale } = await params;
+    const locale = rawLocale.toLowerCase();
     const query = await searchParams;
     const t = await getTranslations('analytics');
 
@@ -17,97 +23,73 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
     const periods = getPeriodKeys(now);
 
     // Filter Params
-    const period = query.period || 'weekly';
+    const period = (query.period || 'weekly').toLowerCase();
     const dimension = query.dimension || 'global';
     const value = query.value || '';
 
-    // --- HELPER: Fetch Stats for a Period ---
-    const fetchStats = async (periodType: string, periodKey: string) => {
+    // --- HELPER: Fetch Stats for a Period (For Top Cards) ---
+    const fetchTopStats = async (periodType: string, periodKey: string) => {
+        // Ensure dateKey is 'all_time' if period is 'all_time'
+        const dateKey = periodType === Periods.ALL_TIME ? 'all_time' : periodKey;
+
         let key = '';
         if (dimension === 'global') {
-            key = `rank:${locale}:global:${periodType}:${periodKey}`;
+            key = RedisKeys.rankGlobal(locale, periodType, dateKey);
         } else if (dimension === 'category' && value) {
-            key = `rank:${locale}:category:${value}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankCategory(locale, value, periodType, dateKey);
         } else if (dimension === 'zodiac' && value) {
-            // Zodiac only has monthly/yearly usually, but let's try uniform pattern if we changed it,
-            // or stick to keys in recordInteraction.
-            // recordInteraction has: rank:{locale}:zodiac:{zodiac} (without date) ??
-            // wait, recordInteraction adds to:
-            // rank:{locale}:zodiac:{zodiac}:monthly:{monthKey} etc.
-            // Let's check recordInteraction implementation again.
-            // It calls addIncrements(`rank:${data.locale}:zodiac:${data.zodiac.toLowerCase()}`);
-            // which adds :daily, :weekly, :monthly, :yearly suffixes.
-            key = `rank:${locale}:zodiac:${value.toLowerCase()}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankZodiac(locale, value.toLowerCase(), periodType, dateKey);
         } else if (dimension === 'born' && value) {
-            key = `rank:${locale}:born:${value}:${periodType}:${periodKey}`;
+            key = RedisKeys.rankBorn(locale, value, periodType, dateKey);
         } else {
-             // Fallback for missing value
-             return [];
-        }
-
-        // Handle "all_time" special case
-        if (periodType === 'all_time') {
-             // Reconstruct key: remove :periodType:periodKey and add :all_time
-             // Actually addIncrements adds :all_time suffix directly to prefix.
-             // Prefix was `rank:${locale}:global` etc.
-             // So it becomes `rank:${locale}:global:all_time`
-             if (dimension === 'global') key = `rank:${locale}:global:all_time`;
-             else if (dimension === 'category' && value) key = `rank:${locale}:category:${value}:all_time`;
-             else if (dimension === 'zodiac' && value) key = `rank:${locale}:zodiac:${value.toLowerCase()}:all_time`;
-             else if (dimension === 'born' && value) key = `rank:${locale}:born:${value}:all_time`;
+             return null;
         }
 
         const res = await redis.zrevrange(key, 0, 0, 'WITHSCORES'); // Top 1 only for summary cards
         if (res && res.length > 0) {
-            return [{ id: res[0], score: parseInt(res[1]) }];
+            return { id: res[0], score: parseInt(res[1]) };
         }
-        return [];
+        return null;
     };
 
-    // Parallel Fetching for Dashboard Cards (Weekly, Monthly, Yearly)
-    // We want to show "Top Celebrity" for these 3 periods side-by-side if in global view?
-    // Or just fetch the SELECTED period data for the table, and parallel fetch summaries?
-    // The requirement says: "Responsive 3-Column Analytics Dashboard... Parallel Fetching... Weekly, Monthly, Yearly data concurrently"
-
-    // Let's fetch Top 1 for Weekly, Monthly, Yearly to show in cards at top.
+    // Parallel Fetching for Dashboard Cards
     const results = await Promise.allSettled([
-        fetchStats('weekly', periods.weekly),
-        fetchStats('monthly', periods.monthly),
-        fetchStats('yearly', periods.yearly)
+        fetchTopStats(Periods.WEEKLY, periods.weekly),
+        fetchTopStats(Periods.MONTHLY, periods.monthly),
+        fetchTopStats(Periods.YEARLY, periods.yearly)
     ]);
 
-    const weeklyTop = results[0].status === 'fulfilled' ? results[0].value : [];
-    const monthlyTop = results[1].status === 'fulfilled' ? results[1].value : [];
-    const yearlyTop = results[2].status === 'fulfilled' ? results[2].value : [];
+    const weeklyTop = results[0].status === 'fulfilled' ? results[0].value : null;
+    const monthlyTop = results[1].status === 'fulfilled' ? results[1].value : null;
+    const yearlyTop = results[2].status === 'fulfilled' ? results[2].value : null;
 
-    // Now fetch the MAIN list based on selected period for the Table
-    let mainListKey = '';
-    let timeSuffix = '';
+    // --- MAIN LEADERBOARD ---
 
-    // Construct Main List Key
-     if (period === 'all_time') {
-        timeSuffix = `:all_time`;
-    } else {
-        // period is daily, weekly, monthly, yearly
-        // we need the specific key value
-        const pKey = periods[period as keyof typeof periods];
-        timeSuffix = `:${period}:${pKey}`;
+    // Determine DateKey for the selected period
+    let mainDateKey = 'all_time';
+    if (period !== 'all_time' && period in periods) {
+        mainDateKey = periods[period as keyof typeof periods];
+    } else if (period !== 'all_time') {
+        // Fallback to weekly if invalid
+        mainDateKey = periods.weekly;
     }
 
+    let mainListKey = '';
+
     if (dimension === 'global') {
-        mainListKey = `rank:${locale}:global${timeSuffix}`;
+        mainListKey = RedisKeys.rankGlobal(locale, period, mainDateKey);
     } else if (dimension === 'category' && value) {
-        mainListKey = `rank:${locale}:category:${value}${timeSuffix}`;
+        mainListKey = RedisKeys.rankCategory(locale, value, period, mainDateKey);
     } else if (dimension === 'zodiac' && value) {
-        mainListKey = `rank:${locale}:zodiac:${value.toLowerCase()}${timeSuffix}`;
+        mainListKey = RedisKeys.rankZodiac(locale, value.toLowerCase(), period, mainDateKey);
     } else if (dimension === 'born' && value) {
-        mainListKey = `rank:${locale}:born:${value}${timeSuffix}`;
+        mainListKey = RedisKeys.rankBorn(locale, value, period, mainDateKey);
     }
 
     const leaderboard = await redis.zrevrange(mainListKey, 0, 49, 'WITHSCORES');
 
-    // Parse Leaderboard
-    const parsedLeaderboard = [];
+    // Parse Leaderboard IDs and Scores
+    const parsedLeaderboard: { id: string; score: number; rank: number; views?: number; boosts?: number }[] = [];
     if (leaderboard && leaderboard.length > 0) {
         for (let i = 0; i < leaderboard.length; i += 2) {
             parsedLeaderboard.push({
@@ -118,12 +100,36 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
         }
     }
 
-    // Collect all IDs to fetch (Main list + Card Tops)
+    // ENRICHMENT: Fetch View and Boost Counts specifically using stat:views/stat:boosts keys
+    if (parsedLeaderboard.length > 0) {
+        const statsPipeline = redis.pipeline();
+        parsedLeaderboard.forEach(item => {
+            const viewKey = RedisKeys.statViews(locale, period, mainDateKey);
+            const boostKey = RedisKeys.statBoosts(locale, period, mainDateKey);
+            statsPipeline.zscore(viewKey, item.id);
+            statsPipeline.zscore(boostKey, item.id);
+        });
+
+        const statsResults = await statsPipeline.exec();
+
+        if (statsResults) {
+            let resultIdx = 0;
+            parsedLeaderboard.forEach(item => {
+                const [errV, viewCount] = statsResults[resultIdx++] || [null, 0];
+                const [errB, boostCount] = statsResults[resultIdx++] || [null, 0];
+
+                item.views = viewCount ? parseInt(viewCount as string) : 0;
+                item.boosts = boostCount ? parseInt(boostCount as string) : 0;
+            });
+        }
+    }
+
+    // Collect all IDs to fetch
     const allIds = new Set<string>();
     parsedLeaderboard.forEach(i => allIds.add(i.id));
-    weeklyTop.forEach(i => allIds.add(i.id));
-    monthlyTop.forEach(i => allIds.add(i.id));
-    yearlyTop.forEach(i => allIds.add(i.id));
+    if (weeklyTop) allIds.add(weeklyTop.id);
+    if (monthlyTop) allIds.add(monthlyTop.id);
+    if (yearlyTop) allIds.add(yearlyTop.id);
 
     // Hydrate Names from DB
     const celebrities = await prisma.celebrity.findMany({
@@ -132,11 +138,19 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
             id: true,
             name: true,
             images: { where: { isMain: true }, take: 1, select: { url: true } },
-            image: true
+            image: true,
+            translations: {
+                where: { language: locale.toUpperCase() as any },
+                select: { name: true }
+            }
         }
     });
 
-    const getCelebName = (id: string) => celebrities.find(c => c.id === id)?.name || 'Unknown';
+    const getCelebName = (id: string) => {
+        const cel = celebrities.find(c => c.id === id);
+        return cel?.translations[0]?.name || cel?.name || 'Unknown';
+    };
+    
     const getCelebImage = (id: string) => {
          const cel = celebrities.find(c => c.id === id);
          let img = cel?.images[0]?.url || cel?.image || null;
@@ -161,59 +175,28 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
 
             {/* Visual Cards (3-Column Layout) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Weekly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                    <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Weekly</h3>
-                        <p className="text-xs text-gray-400">{periods.weekly}</p>
+                {[
+                    { title: 'Top Weekly', period: periods.weekly, data: weeklyTop, color: 'text-blue-600' },
+                    { title: 'Top Monthly', period: periods.monthly, data: monthlyTop, color: 'text-purple-600' },
+                    { title: 'Top Yearly', period: periods.yearly, data: yearlyTop, color: 'text-green-600' }
+                ].map((card, i) => (
+                    <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
+                        <div>
+                            <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">{card.title}</h3>
+                            <p className="text-xs text-gray-400">{card.period}</p>
+                        </div>
+                        {card.data ? (
+                             <div>
+                                <p className={`text-xl font-bold mt-2 truncate ${card.color}`}>
+                                    {getCelebName(card.data.id)}
+                                </p>
+                                <p className="text-sm text-gray-500">Score: {card.data.score.toLocaleString()}</p>
+                             </div>
+                        ) : (
+                            <p className="text-gray-400 italic">No data</p>
+                        )}
                     </div>
-                    {weeklyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-blue-600 mt-2 truncate">
-                                {getCelebName(weeklyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {weeklyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
-
-                {/* Monthly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                     <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Monthly</h3>
-                        <p className="text-xs text-gray-400">{periods.monthly}</p>
-                    </div>
-                    {monthlyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-purple-600 mt-2 truncate">
-                                {getCelebName(monthlyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {monthlyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
-
-                {/* Yearly Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between h-40">
-                     <div>
-                        <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider">Top Yearly</h3>
-                        <p className="text-xs text-gray-400">{periods.yearly}</p>
-                    </div>
-                     {yearlyTop.length > 0 ? (
-                         <div>
-                            <p className="text-xl font-bold text-green-600 mt-2 truncate">
-                                {getCelebName(yearlyTop[0].id)}
-                            </p>
-                            <p className="text-sm text-gray-500">Score: {yearlyTop[0].score.toLocaleString()}</p>
-                         </div>
-                    ) : (
-                        <p className="text-gray-400 italic">No data</p>
-                    )}
-                </div>
+                ))}
             </div>
 
             {/* Leaderboard Table */}
@@ -234,13 +217,15 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                             <tr>
                                 <th className="px-6 py-4 w-20">Rank</th>
                                 <th className="px-6 py-4">Celebrity</th>
-                                <th className="px-6 py-4 text-right">{t('views')}</th>
+                                <th className="px-6 py-4 text-right">Views</th>
+                                <th className="px-6 py-4 text-right">Boosts</th>
+                                <th className="px-6 py-4 text-right text-xs text-gray-400">Total Score</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {hydratedLeaderboard.length === 0 ? (
                                 <tr>
-                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                                         <div className="flex flex-col items-center gap-2">
                                             <span className="text-4xl">📉</span>
                                             <p>No data found for this filter.</p>
@@ -271,7 +256,13 @@ export default async function AdminAnalyticsPage({ searchParams, params }: { sea
                                             </div>
                                             <span className="font-semibold text-gray-800">{item.name}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-right font-mono text-blue-600 font-medium bg-blue-50/30">
+                                        <td className="px-6 py-4 text-right font-mono text-blue-600 font-medium bg-blue-50/30 rounded">
+                                            {item.views?.toLocaleString()} 
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-mono text-purple-600 font-bold bg-purple-50/30 rounded">
+                                            {item.boosts?.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-mono text-xs text-gray-400">
                                             {item.score.toLocaleString()}
                                         </td>
                                     </tr>

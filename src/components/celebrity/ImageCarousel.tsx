@@ -3,17 +3,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import type { CelebrityImage } from '@/lib/types'
+import { MonthlyRankBadge } from './MonthlyRankBadge'
 
 interface ImageCarouselProps {
   images: CelebrityImage[]
   celebrityName: string
   fallbackLetter?: string
+  monthlyRank?: number | null
 }
 
 export default function ImageCarousel({
   images,
   celebrityName,
-  fallbackLetter
+  fallbackLetter,
+  monthlyRank
 }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
@@ -130,6 +133,9 @@ export default function ImageCarousel({
       aria-label={`${celebrityName} fotoğraf galerisi`}
       aria-roledescription="carousel"
     >
+      {/* Monthly Rank Badge Overlay */}
+      {monthlyRank && <MonthlyRankBadge rank={monthlyRank} />}
+
       {/* Main Image - Only current image is loaded with priority */}
       {validImages.map((image, index) => {
         

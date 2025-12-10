@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import CelebrityProfile from '@/components/celebrity/CelebrityProfile'
+import ViewTracker from '@/components/celebrity/ViewTracker'
 import { getCelebrityBySlug } from '@/actions/celebrities'
 import { generateStructuredDataScript } from '@/lib/seo'
 import type { Metadata } from 'next'
@@ -114,11 +115,24 @@ export default async function CelebrityPage({ params }: PageProps) {
 
   const structuredData = generateStructuredDataScript(celebrity, locale)
 
+  // Analytics için metadata çıkar
+  const primaryCategory = celebrity.categories?.[0]?.slug
+  const birthYear = celebrity.birthDate 
+    ? new Date(celebrity.birthDate).getFullYear() 
+    : undefined
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: structuredData }}
+      />
+      <ViewTracker
+        celebrityId={celebrity.id}
+        locale={locale}
+        categorySlug={primaryCategory}
+        zodiac={celebrity.zodiac?.toLowerCase()}
+        birthYear={birthYear}
       />
       <CelebrityProfile celebrity={celebrity} />
     </>

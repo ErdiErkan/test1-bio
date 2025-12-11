@@ -276,5 +276,75 @@
   "search": {
     "placeholder": "Search celebrity (e.g. Actor, Singer...)",
     "all": "All"
+  },
+  "competitions": {
+    "title": "Competitions & Rankings",
+    "subtitle": "Follow the world's most prestigious events and rankings.",
+    "meta_description": "Browse the latest beauty pageants, awards, and celebrity competitions.",
+    "popular": "Popular Competitions",
+    "recent": "Recent Competitions",
+    "all": "All Competitions",
+    "view_all": "View All",
+    "no_results": "No competitions found",
+
+    "filters": {
+      "type": "Type",
+      "year": "Year",
+      "country": "Country",
+      "scope": "Scope",
+      "clear": "Clear Filters"
+    },
+
+    "types": {
+      "BEAUTY_PAGEANT": "Beauty Pageant",
+      "AWARD_CEREMONY": "Award Ceremony",
+      "TALENT_SHOW": "Talent Show",
+      "FILM_FESTIVAL": "Film Festival",
+      "MUSIC_AWARD": "Music Award",
+      "SPORTS_EVENT": "Sports Event",
+      "REALITY_SHOW": "Reality Show",
+      "OTHER": "Other"
+    },
+
+    "scopes": {
+      "GLOBAL": "Global",
+      "CONTINENTAL": "Continental",
+      "NATIONAL": "National",
+      "REGIONAL": "Regional"
+    },
+
+    "placements": {
+      "winner": "Winner",
+      "first_runner_up": "1st Runner-up",
+      "second_runner_up": "2nd Runner-up",
+      "third_runner_up": "3rd Runner-up",
+      "top_5": "Top 5",
+      "top_10": "Top 10",
+      "top_12": "Top 12",
+      "semifinalist": "Semi-finalist",
+      "finalist": "Finalist",
+      "participant": "Participant"
+    },
+
+    "detail": {
+      "official_ranking": "Official Ranking",
+      "special_awards": "Special Awards",
+      "about": "About This Competition",
+      "related": "Related Competitions",
+      "representing": "Representing",
+      "view_profile": "View Profile"
+    },
+
+    "admin": {
+      "manage": "Manage Competitions",
+      "create": "Create Competition",
+      "edit": "Edit Competition",
+      "add_contestant": "Add Contestant",
+      "search_celebrity": "Search celebrity...",
+      "drag_to_reorder": "Drag to reorder",
+      "save_rankings": "Save Rankings",
+      "remove_contestant": "Remove",
+      "contestant_exists": "This celebrity is already in the competition"
+    }
   }
 }

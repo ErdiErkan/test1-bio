@@ -276,5 +276,75 @@
   "search": {
     "placeholder": "Ünlü ara (Örn: Kemal Sunal, oyuncu...)",
     "all": "Tümü"
+  },
+  "competitions": {
+    "title": "Yarışmalar & Sıralamalar",
+    "subtitle": "Dünyanın en prestijli etkinliklerini ve sıralamalarını takip edin.",
+    "meta_description": "En son güzellik yarışmaları, ödül törenleri ve ünlü yarışmalarına göz atın.",
+    "popular": "Popüler Yarışmalar",
+    "recent": "Son Eklenenler",
+    "all": "Tüm Yarışmalar",
+    "view_all": "Tümünü Gör",
+    "no_results": "Yarışma bulunamadı",
+
+    "filters": {
+      "type": "Tür",
+      "year": "Yıl",
+      "country": "Ülke",
+      "scope": "Kapsam",
+      "clear": "Filtreleri Temizle"
+    },
+
+    "types": {
+      "BEAUTY_PAGEANT": "Güzellik Yarışması",
+      "AWARD_CEREMONY": "Ödül Töreni",
+      "TALENT_SHOW": "Yetenek Şovu",
+      "FILM_FESTIVAL": "Film Festivali",
+      "MUSIC_AWARD": "Müzik Ödülü",
+      "SPORTS_EVENT": "Spor Etkinliği",
+      "REALITY_SHOW": "Reality Şov",
+      "OTHER": "Diğer"
+    },
+
+    "scopes": {
+      "GLOBAL": "Küresel",
+      "CONTINENTAL": "Kıtasal",
+      "NATIONAL": "Ulusal",
+      "REGIONAL": "Bölgesel"
+    },
+
+    "placements": {
+      "winner": "Kazanan",
+      "first_runner_up": "1. Runner-up",
+      "second_runner_up": "2. Runner-up",
+      "third_runner_up": "3. Runner-up",
+      "top_5": "İlk 5",
+      "top_10": "İlk 10",
+      "top_12": "İlk 12",
+      "semifinalist": "Yarı Finalist",
+      "finalist": "Finalist",
+      "participant": "Katılımcı"
+    },
+
+    "detail": {
+      "official_ranking": "Resmi Sıralama",
+      "special_awards": "Özel Ödüller",
+      "about": "Yarışma Hakkında",
+      "related": "Benzer Yarışmalar",
+      "representing": "Temsil Ettiği",
+      "view_profile": "Profili Gör"
+    },
+
+    "admin": {
+      "manage": "Yarışmaları Yönet",
+      "create": "Yarışma Oluştur",
+      "edit": "Yarışmayı Düzenle",
+      "add_contestant": "Yarışmacı Ekle",
+      "search_celebrity": "Ünlü ara...",
+      "drag_to_reorder": "Sıralamak için sürükleyin",
+      "save_rankings": "Sıralamayı Kaydet",
+      "remove_contestant": "Çıkar",
+      "contestant_exists": "Bu ünlü zaten yarışmada ekli"
+    }
   }
 }

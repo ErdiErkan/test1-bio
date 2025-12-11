@@ -41,6 +41,41 @@ export const routing = defineRouting({
             fr: '/celebrite/[slug]',
             it: '/celebrita/[slug]',
             pt: '/celebridade/[slug]'
+        },
+
+        // Competition routes
+        '/competitions': {
+            en: '/competitions',
+            tr: '/yarismalari',
+            de: '/wettbewerbe',
+            es: '/competiciones',
+            fr: '/competitions',
+            it: '/competizioni',
+            pt: '/competicoes'
+        },
+
+        '/competition/[slug]': {
+            en: '/competition/[slug]',
+            tr: '/yarisma/[slug]',
+            de: '/wettbewerb/[slug]',
+            es: '/competicion/[slug]',
+            fr: '/competition/[slug]',
+            it: '/competizione/[slug]',
+            pt: '/competicao/[slug]'
+        },
+
+        // Admin competition routes
+        '/admin/competitions': {
+            en: '/admin/competitions',
+            tr: '/yonetim/yarismalari'
+        },
+        '/admin/competitions/create': {
+            en: '/admin/competitions/create',
+            tr: '/yonetim/yarismalari/olustur'
+        },
+        '/admin/competitions/edit/[id]': {
+            en: '/admin/competitions/edit/[id]',
+            tr: '/yonetim/yarismalari/duzenle/[id]'
         }
     }
 });

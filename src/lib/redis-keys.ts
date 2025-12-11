@@ -29,7 +29,24 @@ export const RedisKeys = {
   // 4. UTILITY
   rateLimit: (ip: string, action: string, id: string) => k('limit', action, ip, id),
   indexSlugs: (locale: string) => k('index', locale, 'slugs'),
+
+  // 5. COMPETITION KEYS
+  competition: {
+    // View counters
+    views: (locale: string, period: string) => k('competition', 'views', locale, period),
+    viewsAllTime: () => k('competition', 'views', 'all_time'),
+
+    // Popular ranking
+    popular: () => k('competition', 'popular'),
+    popularByType: (type: string) => k('competition', 'popular', type),
+
+    // Cache
+    cache: (slug: string) => k('cache', 'competition', slug),
+  }
 };
+
+// Export CompetitionRedisKeys separately to match imports
+export const CompetitionRedisKeys = RedisKeys.competition;
 
 export const Periods = {
   DAILY: 'daily',

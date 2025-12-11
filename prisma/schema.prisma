@@ -48,17 +48,43 @@ enum SocialPlatform {
   SPOTIFY
 }
 
+enum CompetitionType {
+  BEAUTY_PAGEANT
+  AWARD_CEREMONY
+  TALENT_SHOW
+  FILM_FESTIVAL
+  MUSIC_AWARD
+  SPORTS_EVENT
+  REALITY_SHOW
+  OTHER
+}
+
+enum CompetitionScope {
+  GLOBAL
+  CONTINENTAL
+  NATIONAL
+  REGIONAL
+}
+
+enum CompetitionStatus {
+  DRAFT
+  UPCOMING
+  ONGOING
+  COMPLETED
+  ARCHIVED
+}
+
 // ============================================
 // User Model - Authentication
 // ============================================
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique @db.VarChar(255)
-  passwordHash  String   @db.VarChar(255)
-  name          String?  @db.VarChar(255)
-  role          String   @default("admin") @db.VarChar(50) // admin, editor vb.
-  createdAt     DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  id           String   @id @default(cuid())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  name         String?  @db.VarChar(255)
+  role         String   @default("admin") @db.VarChar(50) // admin, editor vb.
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([email])
   @@map("users")
@@ -68,19 +94,19 @@ model User {
 // Category Model - Flexible categorization
 // ============================================
 model Category {
-  id          String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Legacy fields (Keep for migration)
-  name        String   @unique @db.VarChar(100)
-  slug        String   @unique @db.VarChar(100)
-  description String?  @db.Text
-  
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  name        String  @unique @db.VarChar(100)
+  slug        String  @unique @db.VarChar(100)
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   // Many-to-Many relationship
   celebrities Celebrity[]
-  
+
   // Translations
   translations CategoryTranslation[]
 
@@ -90,15 +116,15 @@ model Category {
 }
 
 model CategoryTranslation {
-  id          String   @id @default(cuid())
-  language    Language
-  
-  name        String   @db.VarChar(100)
-  slug        String   @db.VarChar(100)
-  description String?  @db.Text
+  id       String   @id @default(cuid())
+  language Language
 
-  categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String  @db.VarChar(100)
+  slug        String  @db.VarChar(100)
+  description String? @db.Text
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([categoryId, language])
   @@unique([slug, language])
@@ -110,28 +136,28 @@ model CategoryTranslation {
 // Celebrity Model - Main entity
 // ============================================
 model Celebrity {
-  id          String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Legacy fields (Keep for migration)
-  name        String   @db.VarChar(255)
-  nickname    String?  @db.VarChar(255)
-  profession  String?  @db.VarChar(255)
-  birthPlace  String?  @db.VarChar(255) 
-  nationality String?  @db.VarChar(10)
-  zodiac      String?  @db.VarChar(20)
-  bio         String?  @db.Text
-  slug        String   @unique @db.VarChar(300)
-  
+  name        String  @db.VarChar(255)
+  nickname    String? @db.VarChar(255)
+  profession  String? @db.VarChar(255)
+  birthPlace  String? @db.VarChar(255)
+  nationality String? @db.VarChar(10)
+  zodiac      String? @db.VarChar(20)
+  bio         String? @db.Text
+  slug        String  @unique @db.VarChar(300)
+
   // Neutral Fields
-  birthDate   DateTime?
-  gender      String?   @db.VarChar(50) // New field
-  image       String?   @db.VarChar(1000) // @deprecated - Use images relation instead.
-  
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  birthDate DateTime?
+  gender    String?   @db.VarChar(50) // New field
+  image     String?   @db.VarChar(1000) // @deprecated - Use images relation instead.
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   // Many-to-Many relationship (Implicit)
-  categories       Category[]
+  categories Category[]
 
   // One-to-Many relationship with Celebrity Images (max 3)
   images CelebrityImage[]
@@ -148,8 +174,11 @@ model Celebrity {
   // One-to-Many relationship with Reports
   reports Report[]
 
+  // One-to-Many relationship with Competition Entries
+  competitionEntries CompetitionEntry[]
+
   publishedLanguages String[] @default([])
-  
+
   // Translations
   translations CelebrityTranslation[]
 
@@ -161,28 +190,27 @@ model Celebrity {
   @@index([createdAt(sort: Desc)])
   @@index([slug])
   @@index([gender])
-
   @@map("celebrities")
 }
 
 model CelebrityTranslation {
-  id          String   @id @default(cuid())
-  language    Language
-  
+  id       String   @id @default(cuid())
+  language Language
+
   // Translatable Content
-  name        String   @db.VarChar(255)
-  nickname    String?  @db.VarChar(255)
-  profession  String?  @db.VarChar(255)
-  slug        String   @db.VarChar(300)
-  bio         String?  @db.Text
-  
+  name       String  @db.VarChar(255)
+  nickname   String? @db.VarChar(255)
+  profession String? @db.VarChar(255)
+  slug       String  @db.VarChar(300)
+  bio        String? @db.Text
+
   // Location/Details that might differ by language
-  birthPlace  String?  @db.VarChar(255) 
-  nationality String?  @db.VarChar(10) 
-  zodiac      String?  @db.VarChar(20) 
-  
+  birthPlace  String? @db.VarChar(255)
+  nationality String? @db.VarChar(10)
+  zodiac      String? @db.VarChar(20)
+
   // SEO
-  altText     String?  @db.VarChar(255) 
+  altText String? @db.VarChar(255)
 
   celebrityId String
   celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
@@ -190,12 +218,10 @@ model CelebrityTranslation {
   // Constraints & Indices for Performance
   @@unique([celebrityId, language])
   @@unique([slug, language])
-  
   @@index([language])
-  @@index([name]) 
+  @@index([name])
   @@index([profession])
   @@index([slug])
-  
   @@map("celebrity_translations")
 }
 
@@ -220,7 +246,6 @@ model CelebrityImage {
   @@map("celebrity_images")
 }
 
-
 // ============================================
 // Social Media Link Model
 // ============================================
@@ -233,8 +258,8 @@ model SocialMediaLink {
   updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
 
   // Relation to Celebrity
-  celebrityId  String
-  celebrity    Celebrity      @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+  celebrityId String
+  celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
 
   @@index([celebrityId])
   @@index([platform])
@@ -273,11 +298,11 @@ model Report {
   contactEmail String?      @db.VarChar(255)
   status       ReportStatus @default(PENDING)
 
-  language     Language     @default(EN)
+  language Language @default(EN)
 
-  ipAddress    String?      @db.VarChar(45)
-  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+  ipAddress String?  @db.VarChar(45)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([celebrityId])
   @@index([status])
@@ -299,29 +324,27 @@ enum Period {
 }
 
 model CelebrityStats {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   celebrityId String
   celebrity   Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
-  
-  period      Period
-  date        DateTime @db.Date // For historical tracking (e.g. 2023-12-08)
-  
-  views       Int      @default(0)
-  boosts      Int      @default(0)
-  
-  rankGlobal  Int      @default(0)
-  rankLocal   Int      @default(0) 
-  
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
+  period Period
+  date   DateTime @db.Date // For historical tracking (e.g. 2023-12-08)
+
+  views  Int @default(0)
+  boosts Int @default(0)
+
+  rankGlobal Int @default(0)
+  rankLocal  Int @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // Unique constraint to prevent duplicate stats for same period/date
+  @@unique([celebrityId, period, date])
   // Compound indexes for fast retrieval as requested
   @@index([period, rankLocal])
   @@index([celebrityId, period])
-  
-  // Unique constraint to prevent duplicate stats for same period/date
-  @@unique([celebrityId, period, date])
-  
   @@map("celebrity_stats")
 }
 
@@ -330,8 +353,207 @@ model SystemSetting {
   value       Json
   description String?
 
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("system_settings")
+}
+
+// ============================================
+// Competition - Main Entity
+// ============================================
+
+model Competition {
+  id          String   @id @default(cuid())
+
+  // Root/Legacy Fields (Default language - EN)
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(300)
+  description String?  @db.Text
+
+  // Classification
+  type        CompetitionType   @default(BEAUTY_PAGEANT)
+  scope       CompetitionScope  @default(GLOBAL)
+  status      CompetitionStatus @default(DRAFT)
+
+  // Event Details
+  eventDate   DateTime?
+  year        Int
+  edition     Int?
+
+  // Location
+  country     String?  @db.VarChar(10)
+  city        String?  @db.VarChar(100)
+  venue       String?  @db.VarChar(255)
+
+  // Media
+  coverImage  String?  @db.VarChar(1000)
+  logoImage   String?  @db.VarChar(1000)
+
+  // SEO Content (Rich text below rankings)
+  seoContent  String?  @db.Text
+
+  // Visibility & Analytics
+  isFeatured  Boolean  @default(false)
+  viewCount   Int      @default(0)
+
+  // Language Control (matching Celebrity pattern)
+  publishedLanguages String[] @default([])
+
+  // Timestamps
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  @@map("system_settings")
+  // Relations
+  entries      CompetitionEntry[]
+  translations CompetitionTranslation[]
+  categories   CompetitionCategory[]
+
+  // Performance Indexes (CRITICAL for high traffic)
+  @@index([slug])
+  @@index([type])
+  @@index([scope])
+  @@index([status])
+  @@index([year])
+  @@index([country])
+  @@index([eventDate(sort: Desc)])
+  @@index([isFeatured])
+  @@index([viewCount(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([status, year])           // Composite for filtered queries
+  @@index([type, status])           // Composite for category pages
+
+  @@map("competitions")
+}
+
+// ============================================
+// Competition Translations
+// ============================================
+
+model CompetitionTranslation {
+  id              String   @id @default(cuid())
+  language        Language
+
+  // Translatable Content
+  name            String   @db.VarChar(255)
+  slug            String   @db.VarChar(300)
+  description     String?  @db.Text
+  seoContent      String?  @db.Text
+
+  // SEO Meta (per language)
+  metaTitle       String?  @db.VarChar(70)
+  metaDescription String?  @db.VarChar(160)
+
+  // Relation
+  competitionId   String
+  competition     Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([competitionId, language])
+  @@unique([slug, language])
+
+  // Indexes
+  @@index([language])
+  @@index([slug])
+  @@index([name])
+
+  @@map("competition_translations")
+}
+
+// ============================================
+// Competition Entry (Pivot: Competition ↔ Celebrity)
+// ============================================
+
+model CompetitionEntry {
+  id                  String   @id @default(cuid())
+
+  // Relations
+  competitionId       String
+  competition         Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  celebrityId         String
+  celebrity           Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Restrict)
+
+  // Ranking Information
+  rank                Int
+  placement           String?  @db.VarChar(100)
+
+  // Additional Awards (for pageants)
+  specialAwards       String[] @default([])
+
+  // Representation (which country they represent, may differ from nationality)
+  representingCountry String? @db.VarChar(10)
+
+  // Quick Filters
+  isWinner            Boolean  @default(false)
+
+  // Admin Notes
+  notes               String?  @db.Text
+
+  // Timestamps
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  // Constraints
+  @@unique([competitionId, celebrityId])
+
+  // Indexes
+  @@index([competitionId])
+  @@index([celebrityId])
+  @@index([rank])
+  @@index([isWinner])
+  @@index([representingCountry])
+  @@index([competitionId, rank])
+
+  @@map("competition_entries")
+}
+
+// ============================================
+// Competition Category (Series: Miss World, Oscar, etc.)
+// ============================================
+
+model CompetitionCategory {
+  id           String   @id @default(cuid())
+
+  // Root Fields
+  name         String   @unique @db.VarChar(100)
+  slug         String   @unique @db.VarChar(100)
+  description  String?  @db.Text
+  logoImage    String?  @db.VarChar(1000)
+
+  // Display Order
+  displayOrder Int      @default(0)
+
+  // Relations
+  competitions Competition[]
+  translations CompetitionCategoryTranslation[]
+
+  // Timestamps
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([slug])
+  @@index([displayOrder])
+
+  @@map("competition_categories")
+}
+
+model CompetitionCategoryTranslation {
+  id          String   @id @default(cuid())
+  language    Language
+
+  name        String   @db.VarChar(100)
+  slug        String   @db.VarChar(100)
+  description String?  @db.Text
+
+  categoryId  String
+  category    CompetitionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, language])
+  @@unique([slug, language])
+
+  @@index([language])
+  @@index([slug])
+
+  @@map("competition_category_translations")
 }

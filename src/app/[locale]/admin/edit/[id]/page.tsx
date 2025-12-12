@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import CelebrityForm from '@/components/admin/CelebrityForm'
+import { CompetitionForm } from '@/components/admin/CompetitionForm'
 import Link from 'next/link'
 import { prisma } from '@/lib/db'
 
@@ -33,34 +34,89 @@ async function getCelebrity(id: string) {
   }
 }
 
-export default async function EditCelebrityPage({
-  params
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const celebrity = await getCelebrity(id)
+async function getCompetition(id: string) {
+  try {
+    const competition = await prisma.competition.findUnique({
+      where: { id },
+      include: {
+        translations: true,
+        entries: {
+          include: {
+            celebrity: {
+              include: {
+                images: { where: { isMain: true }, take: 1 }
+              }
+            }
+          },
+          orderBy: [
+            { rank: 'asc' },
+            { points: 'desc' }
+          ]
+        }
+      }
+    })
+    return competition
+  } catch (error) {
+    console.error('Error fetching competition:', error)
+    return null
+  }
+}
 
-  if (!celebrity) {
+interface EditPageProps {
+  params: Promise<{ id: string, locale: string }>
+  searchParams: Promise<{ type?: string }>
+}
+
+export default async function EditPage({ params, searchParams }: EditPageProps) {
+  const { id, locale } = await params
+  const { type } = await searchParams
+
+  const isCompetition = type === 'competition'
+
+  let initialData = null
+
+  if (isCompetition) {
+    initialData = await getCompetition(id)
+  } else {
+    initialData = await getCelebrity(id)
+  }
+
+  if (!initialData) {
     notFound()
   }
 
-  // Debug log to verify translations are present
-  console.log(`[EditPage] Fetched celebrity ${id}. Translations count: ${celebrity.translations?.length}`)
-
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <nav className="mb-8">
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <Link href="/admin" className="hover:text-blue-600">Admin</Link>
             <span>→</span>
-            <span className="text-gray-900">{celebrity.name} Düzenle</span>
+            {isCompetition ? (
+              <Link href="/admin/competitions" className="hover:text-blue-600">Competitions</Link>
+            ) : (
+              <Link href="/admin" className="hover:text-blue-600">Celebrities</Link>
+            )}
+            <span>→</span>
+            <span className="text-gray-900">
+              Edit {isCompetition ? (initialData as any).slug : (initialData as any).name}
+            </span>
           </div>
         </nav>
 
-        <CelebrityForm celebrity={celebrity} isEdit={true} />
+        {isCompetition ? (
+          <CompetitionForm
+            initialData={initialData}
+            isEditing={true}
+            locale={locale}
+          />
+        ) : (
+          <CelebrityForm
+            celebrity={initialData}
+            isEdit={true}
+          />
+        )}
       </div>
     </div>
   )

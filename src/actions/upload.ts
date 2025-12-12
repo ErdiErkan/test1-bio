@@ -5,10 +5,15 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads')
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB for Covers
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
 
-export async function uploadImage(formData: FormData): Promise<{
+type UploadContext = 'default' | 'competition-cover' | 'competition-logo'
+
+export async function uploadImage(
+  formData: FormData,
+  context: UploadContext = 'default'
+): Promise<{
   success: boolean
   imagePath?: string
   error?: string
@@ -17,59 +22,64 @@ export async function uploadImage(formData: FormData): Promise<{
     const file = formData.get('file') as File
 
     if (!file) {
-      return { success: false, error: 'Dosya seçilmedi' }
+      return { success: false, error: 'No file selected' }
     }
 
-    // Dosya tipi kontrolü
+    // Validate type
     if (!ALLOWED_TYPES.includes(file.type)) {
       return {
         success: false,
-        error: 'Sadece JPG, PNG ve WEBP formatları desteklenir',
+        error: 'Only JPG, PNG, and WEBP formats are supported',
       }
     }
 
-    // Dosya boyutu kontrolü
-    if (file.size > MAX_FILE_SIZE) {
+    // Validate size based on context
+    const limit = context === 'competition-logo' ? 2 * 1024 * 1024 : MAX_FILE_SIZE
+    if (file.size > limit) {
       return {
         success: false,
-        error: 'Dosya boyutu maksimum 2MB olabilir',
+        error: `File size must be under ${limit / (1024 * 1024)}MB`,
       }
     }
 
-    // Klasör kontrolü ve oluşturma
-    if (!existsSync(UPLOAD_DIR)) {
+    // Determine target directory
+    let subDir = ''
+    if (context === 'competition-cover') subDir = 'competitions/covers'
+    else if (context === 'competition-logo') subDir = 'competitions/logos'
+
+    const targetDir = subDir ? join(UPLOAD_DIR, subDir) : UPLOAD_DIR
+
+    // Ensure directory exists
+    if (!existsSync(targetDir)) {
       try {
-        await mkdir(UPLOAD_DIR, { recursive: true })
+        await mkdir(targetDir, { recursive: true })
       } catch (err) {
-        console.error('Klasör oluşturma hatası:', err)
-        return { success: false, error: 'Sunucu yazma izni hatası (Klasör)' }
+        console.error('Directory creation error:', err)
+        return { success: false, error: 'Server permission error (Directory)' }
       }
     }
 
-    // Benzersiz dosya adı oluştur
+    // Generate unique filename
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 15)
-    // Dosya adındaki Türkçe karakterleri ve boşlukları temizleyelim
     const originalName = file.name.replace(/[^a-zA-Z0-9.]/g, '')
     const extension = originalName.split('.').pop()
     const fileName = `${timestamp}-${randomString}.${extension}`
 
-    // Dosyayı kaydet
+    // Save file
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const filePath = join(UPLOAD_DIR, fileName)
+    const filePath = join(targetDir, fileName)
 
     try {
       await writeFile(filePath, buffer)
     } catch (err) {
-      console.error('Dosya yazma hatası:', err)
-      return { success: false, error: 'Sunucu yazma izni hatası (Dosya)' }
+      console.error('File write error:', err)
+      return { success: false, error: 'Server permission error (File)' }
     }
-
-    // await writeFile(filePath, buffer) eski halinden kaldı işe yararsa silinecek
   
-    // Public URL oluştur
-    const imagePath = `/uploads/${fileName}`
+    // Return Public URL
+    const imagePath = subDir ? `/uploads/${subDir}/${fileName}` : `/uploads/${fileName}`
 
     return {
       success: true,
@@ -79,7 +89,7 @@ export async function uploadImage(formData: FormData): Promise<{
     console.error('Upload error:', error)
     return {
       success: false,
-      error: 'Dosya yüklenirken bir hata oluştu',
+      error: 'An error occurred while uploading the file',
     }
   }
 }

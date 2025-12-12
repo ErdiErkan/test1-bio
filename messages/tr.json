@@ -55,6 +55,43 @@
       "sagittarius": "Yay"
     }
   },
+  "competitions": {
+    "title": "Yarışmalar",
+    "featured": "Öne Çıkanlar",
+    "trending": "Trendler",
+    "all_competitions": "Tüm Yarışmalar",
+    "status": {
+      "DRAFT": "Taslak",
+      "UPCOMING": "Yaklaşan",
+      "ONGOING": "Devam Eden",
+      "COMPLETED": "Tamamlanan",
+      "ARCHIVED": "Arşivlenen"
+    },
+    "type": {
+      "BEAUTY_PAGEANT": "Güzellik Yarışması",
+      "REALITY_SHOW": "Reality Show",
+      "TALENT_SHOW": "Yetenek Yarışması",
+      "AWARD_SHOW": "Ödül Töreni",
+      "SPORT_EVENT": "Spor Etkinliği",
+      "ELECTION": "Seçim",
+      "OTHER": "Diğer"
+    },
+    "placement": {
+      "WINNER": "Kazanan",
+      "RUNNER_UP": "İkinci",
+      "TOP_3": "İlk 3",
+      "TOP_5": "İlk 5",
+      "TOP_10": "İlk 10",
+      "PARTICIPANT": "Katılımcı"
+    },
+    "view_results": "Sonuçları Gör",
+    "vote_now": "Şimdi Oy Ver",
+    "contestants_count": "{count} Yarışmacı",
+    "winner_title": "Kazanan",
+    "about_event": "Etkinlik Hakkında",
+    "rules": "Kurallar & Kriterler",
+    "share": "Paylaş"
+  },
   "report": {
     "title": "Hata Bildir",
     "description": "<strong>{name}</strong> hakkında bir hata mı buldunuz? Lütfen aşağıdaki formu doldurun.",
@@ -88,7 +125,8 @@
       "celebrities": "Ünlüler",
       "categories": "Kategoriler",
       "feedbacks": "Geri Bildirimler",
-      "home": "Ana Sayfa"
+      "home": "Ana Sayfa",
+      "competitions": "Yarışmalar"
     },
     "dashboard": {
       "title": "Admin Panel",

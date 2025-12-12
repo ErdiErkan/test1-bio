@@ -22,6 +22,7 @@ export const routing = defineRouting({
         '/admin/reports': { en: '/admin/reports', tr: '/yonetim/bildirimler' },
         '/admin/add': { en: '/admin/add', tr: '/yonetim/ekle' },
         '/admin/edit/[id]': { en: '/admin/edit/[id]', tr: '/yonetim/duzenle/[id]' },
+        '/admin/competitions': { en: '/admin/competitions', tr: '/yonetim/yarismalar' },
 
         '/trending': {
             en: '/trending',
@@ -41,6 +42,26 @@ export const routing = defineRouting({
             fr: '/celebrite/[slug]',
             it: '/celebrita/[slug]',
             pt: '/celebridade/[slug]'
+        },
+
+        '/competitions': {
+            en: '/competitions',
+            tr: '/yarismalar',
+            de: '/wettbewerbe',
+            es: '/competiciones',
+            fr: '/competitions',
+            it: '/competizioni',
+            pt: '/competicoes'
+        },
+
+        '/competition/[slug]': {
+            en: '/competition/[slug]',
+            tr: '/yarisma/[slug]',
+            de: '/wettbewerb/[slug]',
+            es: '/competicion/[slug]',
+            fr: '/competition/[slug]',
+            it: '/competizione/[slug]',
+            pt: '/competicao/[slug]'
         }
     }
 });

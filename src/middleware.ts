@@ -13,7 +13,8 @@ export default auth((req) => {
   // 1. Admin Route Protection Strategy
 
   // Check if path contains /admin (e.g. /en/admin, /tr/admin, /admin) or localized variants like /yonetim
-  const protectedPrefixes = ['/admin', '/yonetim'];
+  // Note: /competitions and /competition are PUBLIC, so we only protect explicit admin paths
+  const protectedPrefixes = ['/admin', '/yonetim', '/verwaltung'];
   const isAdminPath = protectedPrefixes.some(prefix => pathname.includes(prefix));
 
   if (isAdminPath) {

@@ -55,6 +55,43 @@
       "sagittarius": "Sagittarius"
     }
   },
+  "competitions": {
+    "title": "Competitions",
+    "featured": "Featured",
+    "trending": "Trending Now",
+    "all_competitions": "All Competitions",
+    "status": {
+      "DRAFT": "Draft",
+      "UPCOMING": "Upcoming",
+      "ONGOING": "Ongoing",
+      "COMPLETED": "Completed",
+      "ARCHIVED": "Archived"
+    },
+    "type": {
+      "BEAUTY_PAGEANT": "Beauty Pageant",
+      "REALITY_SHOW": "Reality Show",
+      "TALENT_SHOW": "Talent Show",
+      "AWARD_SHOW": "Award Show",
+      "SPORT_EVENT": "Sport Event",
+      "ELECTION": "Election",
+      "OTHER": "Other"
+    },
+    "placement": {
+      "WINNER": "Winner",
+      "RUNNER_UP": "Runner Up",
+      "TOP_3": "Top 3",
+      "TOP_5": "Top 5",
+      "TOP_10": "Top 10",
+      "PARTICIPANT": "Participant"
+    },
+    "view_results": "View Results",
+    "vote_now": "Vote Now",
+    "contestants_count": "{count} Contestants",
+    "winner_title": "The Winner",
+    "about_event": "About Event",
+    "rules": "Rules & Criteria",
+    "share": "Share"
+  },
   "report": {
     "title": "Report Error",
     "description": "Found an error about <strong>{name}</strong>? Please fill out the form below.",
@@ -88,7 +125,8 @@
       "celebrities": "Celebrities",
       "categories": "Categories",
       "feedbacks": "Feedbacks",
-      "home": "Home Page"
+      "home": "Home Page",
+      "competitions": "Competitions"
     },
     "dashboard": {
       "title": "Admin Panel",
